@@ -1,0 +1,242 @@
+@import "tailwindcss";
+
+:root {
+  /* Brand Green Palette from Theme */
+  --brand-mint: #d8f3d1; /* Pale mint background */
+  --brand-forest: #22480b; /* Deep dark forest green */
+  --brand-leaf: #66b616; /* Vibrant leaf green */
+  --brand-lime: #c6f19a; /* Soft lime accent green */
+  --brand-dark: #122805; /* Ultra dark forest for text/contrast */
+
+  /* Semantic Theme Variables */
+  --background: var(--brand-mint);
+  --foreground: var(--brand-dark);
+
+  --card: #ffffff;
+  --card-foreground: var(--brand-dark);
+
+  --primary: var(--brand-forest);
+  --primary-foreground: #ffffff;
+
+  --secondary: var(--brand-lime);
+  --secondary-foreground: var(--brand-forest);
+
+  --accent: var(--brand-leaf);
+  --accent-foreground: #ffffff;
+
+  --muted: #e4f7dd;
+  --muted-foreground: #2a5212;
+
+  --border: #bbe7af;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-brand-mint: var(--brand-mint);
+  --color-brand-forest: var(--brand-forest);
+  --color-brand-leaf: var(--brand-leaf);
+  --color-brand-lime: var(--brand-lime);
+  --color-brand-dark: var(--brand-dark);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+
+  --font-sans:
+    var(--font-gsans), var(--font-poppins-web), system-ui, -apple-system,
+    sans-serif;
+  --font-heading: var(--font-morona), var(--font-alice-web), Georgia, serif;
+  --font-poppins: var(--font-poppins-web), sans-serif;
+  --font-alice: var(--font-alice-web), serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: var(--brand-dark);
+    --foreground: #eefbea;
+    --card: #183309;
+    --card-foreground: #eefbea;
+    --border: #2e5a13;
+  }
+}
+
+/* Hide scrollbars globally while preserving scroll functionality */
+html,
+body {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+  width: 0;
+  height: 0;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.font-heading {
+  font-family: var(--font-heading);
+}
+
+/* ─── Lenis smooth scroll (required stylesheet, inlined) ─────────────── */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis:not(.lenis-autoToggle).lenis-stopped {
+  overflow: clip;
+}
+
+.lenis [data-lenis-prevent],
+.lenis [data-lenis-prevent-wheel],
+.lenis [data-lenis-prevent-touch] {
+  overscroll-behavior: contain;
+}
+
+/* Killing iframe pointer events during smooth scroll prevents scroll capture. */
+.lenis.lenis-smooth iframe {
+  pointer-events: none;
+}
+
+/* ─── Rendering polish ───────────────────────────────────────────────── */
+html {
+  -webkit-text-size-adjust: 100%;
+  /* Lenis owns scrolling — native smooth behaviour would fight it. */
+  scroll-behavior: auto;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  /* No rubber-band / scroll chaining at the page edges. */
+  overscroll-behavior-y: none;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--brand-lime);
+  color: var(--brand-forest);
+}
+
+/* Visible, on-brand keyboard focus (mouse clicks stay ring-free). */
+:focus-visible {
+  outline: 2px solid var(--brand-leaf);
+  outline-offset: 3px;
+}
+
+/* Long editorial copy breaks more evenly. */
+p {
+  text-wrap: pretty;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+/* ─── Reduced motion: stop everything, keep the layout ────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─── In-device product film ─────────────────────────────────────────── */
+/* Scenes are stacked absolutely; only the first is visible until the GSAP
+   timeline takes over ownership of visibility. Without this, a slow hydrate
+   paints all four chapters on top of each other. */
+.film-scene:not(:first-child) {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* ─── Secure flow ────────────────────────────────────────────────────── */
+/* Pre-paint state, so nothing flashes before GSAP claims these nodes. The
+   device screens are hidden at every width; the clipped stage is desktop-only,
+   where the display type wipes upward from the same edge the stage grows down
+   from and hands it over. */
+.flow-screen:not(:first-child) {
+  opacity: 0;
+  visibility: hidden;
+}
+
+@media (min-width: 1024px) {
+  .flow-stage {
+    clip-path: inset(0% 0% 100% 0%);
+  }
+}
+
+/* Reduced motion unpins the section in CSS rather than JS. The desktop layout
+   stacks the type act and the stage on top of each other and starts the stage
+   clipped, so simply skipping the timeline would leave a blank viewport. Doing
+   it here also means no flash of the pinned layout before hydration. Card copy
+   needs no rule: the film sets its resting state in JS, so with the film never
+   built the copy is simply on show. */
+@media (prefers-reduced-motion: reduce) and (min-width: 1024px) {
+  .flow-pin {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .flow-type-act,
+  .flow-stage {
+    position: relative !important;
+    inset: auto !important;
+    clip-path: none !important;
+  }
+
+  .flow-stage {
+    padding-bottom: 6rem !important;
+  }
+}
+
+/* Cinematic Text Fade Entrance */
+@keyframes cinematicFade {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-cinematic-fade {
+  animation: cinematicFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

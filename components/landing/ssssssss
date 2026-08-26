@@ -1,0 +1,27 @@
+I have restored 100% scroll-driven, bidirectional control while adding a dedicated readability plateau for "WE FOR YOU" and expanding the scroll duration:
+
+Removed Autoplay & Restored Scroll Control:
+Removed all autoplay states, timers, and scrolling locks from 
+
+FeaturesSection.tsx
+.
+The animation now maps 100% to the scrollbar, meaning scrolling down plays it forward, and scrolling up plays it in reverse smoothly.
+Massive Scroll Runway (Duration):
+Expanded the pinned scroll range to 12.5 viewports (+=${window.innerHeight * 12.5}). This provides a very long scroll path, stretching the transitions out to happen slowly and smoothly.
+Retained the heavy GSAP scrub of 2.2, giving it liquid-like inertia.
+Structured "WE FOR YOU" Readability Plateau:
+In 
+
+CylinderExplosionSphere.tsx
+, mapped a dedicated 20% scroll plateau (0.60 to 0.80 of particle progress).
+During this interval, the particles stay completely stationary in the shape of "WE FOR YOU", meaning the user has to scroll through roughly 0.75 viewport heights of wheel rotation before it explodes. This gives them full control over reading speed.
+Timeline Mapping:
+0.00 to 0.20: Sphere morphing waves fade in.
+0.20 to 0.45: Sphere explodes and settles to the sand dune at the bottom.
+0.45 to 0.60: Sand dune blows up to assemble "WE FOR YOU".
+0.60 to 0.80: Readability Plateau (Text remains fully solid).
+0.80 to 0.90: Text explodes and flies past the camera (black hole travel).
+0.90 to 1.00: Particles fade out, and the sequenced white security messages fade in:
+0.90 to 0.93: Message 2 (Zero Bridge Vulnerabilities)
+0.93 to 0.96: Message 3 (Sovereign Wealth Shield)
+0.96 to 1.00: Message 4 (Secured by V-ZK Consensus)
