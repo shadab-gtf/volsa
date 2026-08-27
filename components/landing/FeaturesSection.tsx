@@ -18,8 +18,8 @@ const features = getFeatures();
  * Features Section — pinned, fully scroll-driven 3D cylinder carousel into a WebGL
  * particle stage. Bidirectional and 100% scrub-linked:
  * - 0% to 32%: 3D cylinder rotates through the feature cards.
- * - 32% to 38%: the active card's key dot zooms out to swallow the viewport.
- * - 38% to 100%: particle stage. Lit sphere -> desert dune field -> "IN YOUR CONTROL"
+ * - 32% to 37.5%: the active card's key dot zooms out to swallow the viewport.
+ * - 37.5% to 100%: particle stage. Lit sphere -> desert dune field -> "IN YOUR CONTROL"
  *   -> three security headlines, each rebuilt from the last -> hyper-warp exit.
  *   Every beat inside it is timed by PARTICLE_PHASES / TEXT_BEATS, and the headlines
  *   are drawn as particles rather than DOM text, so there is no overlay to keep in sync.
@@ -35,8 +35,15 @@ export function FeaturesSection() {
   const [currentAngle, setCurrentAngle] = useState(0);
   
   // Independent scroll progress segments
-  const [zoomProgress, setZoomProgress] = useState(0);      // key dot zoom (0.40 to 0.48)
-  const [particleProgress, setParticleProgress] = useState(0);  // WebGL particles (0.48 to 1.00)
+  const [zoomProgress, setZoomProgress] = useState(0);      // key dot zoom (0.32 to 0.375)
+  const [particleProgress, setParticleProgress] = useState(0);  // WebGL particles (0.375 to 1.00)
+
+  // Mounting the WebGL stage costs a synchronous burst of work — 100k particle buffers
+  // plus the first headline sampling. Doing that at the moment the sphere is meant to
+  // appear stalls exactly the frame you are watching, so mount it well before, still
+  // fully transparent, and let it be warm and idle by the time the dot zoom lands.
+  const [stageMounted, setStageMounted] = useState(false);
+  const stageMountedRef = useRef(false);
 
   useEffect(() => {
     const section = sectionRef.current;
@@ -57,27 +64,15 @@ export function FeaturesSection() {
           pin: pinTarget,
           pinSpacing: true,
           start: "top top",
-          end: () => `+=${window.innerHeight * 17.0}`, // Long path: four particle text beats each need room to read
-          scrub: 1.5, // Responsive, liquid inertia without excessive scroll lag
-          anticipatePin: 1,
+          end: () => `+=${window.innerHeight * 16.5}`, // Four particle text beats, each needing room to read
+          scrub: 1.0, // The particle stage adds its own dt-based easing; more here just lags
           invalidateOnRefresh: true,
-          fastScrollEnd: true,
-          onEnter: () => {
-            const navbar = document.querySelector("nav");
-            if (navbar) gsap.to(navbar, { yPercent: -120, opacity: 0, duration: 0.3, ease: "power2.out" });
-          },
-          onLeave: () => {
-            const navbar = document.querySelector("nav");
-            if (navbar) gsap.to(navbar, { yPercent: -120, opacity: 0, duration: 0.3, ease: "power2.out" });
-          },
-          onEnterBack: () => {
-            const navbar = document.querySelector("nav");
-            if (navbar) gsap.to(navbar, { yPercent: -120, opacity: 0, duration: 0.3, ease: "power2.out" });
-          },
-          onLeaveBack: () => {
-            const navbar = document.querySelector("nav");
-            if (navbar) gsap.to(navbar, { yPercent: -120, opacity: 0, duration: 0.3, ease: "power2.out" });
-          },
+          // No `anticipatePin` and no `fastScrollEnd` here on purpose — both fight
+          // Lenis. anticipatePin engages the pin early by a velocity estimate, which
+          // is a correction for native momentum scroll; Lenis already hands
+          // ScrollTrigger a frame-synced position, so the offset just snaps the
+          // section into place. fastScrollEnd slams the scrub to its end state on a
+          // fast flick, which is a jolt by design.
           onUpdate: (self) => {
             const progress = self.progress;
 
@@ -92,13 +87,19 @@ export function FeaturesSection() {
             );
             setActiveIndex(cardIndex);
 
-            // 2. Key dot zoom progress (0.32 to 0.38)
-            const dotZoom = Math.min(1, Math.max(0, (progress - 0.32) / 0.06));
+            // 2. Key dot zoom progress (0.32 to 0.375)
+            const dotZoom = Math.min(1, Math.max(0, (progress - 0.32) / 0.055));
             setZoomProgress(dotZoom);
 
-            // 3. WebGL particle timeline progress (0.38 to 1.00 of total scroll)
-            const partZoom = Math.min(1, Math.max(0, (progress - 0.38) / 0.62));
+            // 3. WebGL particle timeline progress (0.375 to 1.00 of total scroll)
+            const partZoom = Math.min(1, Math.max(0, (progress - 0.375) / 0.625));
             setParticleProgress(partZoom);
+
+            // Warm the WebGL stage up during the carousel, long before it is visible.
+            if (!stageMountedRef.current && progress > 0.14) {
+              stageMountedRef.current = true;
+              setStageMounted(true);
+            }
           },
         },
       });
@@ -109,9 +110,9 @@ export function FeaturesSection() {
         {
           opacity: 0,
           ease: "power2.out",
-          duration: 0.06,
+          duration: 0.055,
         },
-        0.32
+        0.315
       );
 
       if (headerRef.current) {
@@ -120,21 +121,35 @@ export function FeaturesSection() {
           {
             opacity: 0,
             ease: "power2.out",
-            duration: 0.06,
+            duration: 0.055,
           },
-          0.32
+          0.315
         );
       }
+      // Clear the navbar while the section is still approaching, so the frame the pin
+      // engages on carries no other motion.
+      const hideNavbar = () => {
+        const navbar = document.querySelector("nav");
+        if (navbar) {
+          gsap.to(navbar, { yPercent: -120, opacity: 0, duration: 0.45, ease: "power2.out" });
+        }
+      };
+
+      ScrollTrigger.create({
+        trigger: section,
+        start: "top 75%",
+        end: "bottom top",
+        onEnter: hideNavbar,
+        onLeave: hideNavbar,
+        onEnterBack: hideNavbar,
+        onLeaveBack: hideNavbar,
+      });
     }, section);
 
-    const timer = setTimeout(() => {
-      ScrollTrigger.refresh();
-    }, 100);
-
-    return () => {
-      clearTimeout(timer);
-      ctx.revert();
-    };
+    // No local ScrollTrigger.refresh() here: SmoothScrollProvider already refreshes on
+    // mount and again once fonts settle. An extra refresh re-measures every pin on the
+    // page, and doing that on a timer is its own source of jumps.
+    return () => ctx.revert();
   }, []);
 
   const activeFeature = features[activeIndex];
@@ -204,13 +219,13 @@ export function FeaturesSection() {
         </div>
 
         {/* ─── WebGL Particle Stage (headlines are particles, no DOM overlay) ─── */}
-        {particleProgress > 0 && (
+        {stageMounted && (
           <div
             className="absolute inset-0 z-[150] bg-[#050b04] pointer-events-none"
             style={{
               // Deep space goes opaque before the sphere blooms, so the dot zoom hands
               // off to black instead of showing the carousel through the particles.
-              opacity: Math.min(1, particleProgress / 0.05),
+              opacity: particleProgress > 0 ? Math.min(1, particleProgress / 0.045) : 0,
             }}
           >
             <CylinderExplosionSphere zoomProgress={particleProgress} activeColor="#66b616" />

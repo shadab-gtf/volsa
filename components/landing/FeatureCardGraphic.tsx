@@ -341,4 +341,11 @@ export function FeatureCardGraphic({
   );
 }
 
+/**
+ * Memoised: the parent carousel re-renders on every scroll frame as its rotation
+ * angle changes, but this graphic's props hold steady while a card is off-front.
+ * Without this, five SVG subtrees reconcile per frame through the whole pin.
+ */
+export const MemoFeatureCardGraphic = React.memo(FeatureCardGraphic);
+
 export default FeatureCardGraphic;

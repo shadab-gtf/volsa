@@ -18,60 +18,94 @@ const BRAND = {
   dark: "#122805",
 } as const;
 
+// ─── Scene constants ────────────────────────────────────────────────────────────
+/** Full-fat grain count. Dial this one number to trade density against frame budget. */
+const GRAINS_HIGH = 100000;
+/** Fallback for phones and low-core machines — same look, a third of the CPU cost. */
+const GRAINS_LOW = 30000;
+/** Grain diameter in world units. Sized just under the sphere's own grain spacing. */
+const GRAIN_SIZE = 0.3;
+/** Share of the budget the headlines consume; the remainder becomes ambient dust. */
+const TEXT_SHARE = 0.86;
+
+/**
+ * Sphere radius as a share of the shorter visible axis. Fixed world radii break on
+ * portrait, where the visible width collapses to well under the height.
+ */
+const SPHERE_FILL = 0.37;
+/** Surface ripple depth, as a share of the radius, so the look holds at any size. */
+const SPHERE_SKIN = 0.05;
+const DUNE_BASE = -30;
+const CAM_Z = 132;
+const FOV = 50;
+
 /**
  * Timeline for the particle stage, expressed in `particleProgress` (0 -> 1) — the
  * tail slice of the pinned section's scroll. Single source of truth: FeaturesSection
  * imports this so nothing can drift out of sync with the WebGL beats.
  *
  * Beat sheet:
- *   0.00 - 0.06  sphere blooms out of the dark
- *   0.06 - 0.14  lit sphere turns, surface breathing
+ *   0.00 - 0.05  sphere blooms out of the dark
+ *   0.05 - 0.14  lit sphere turns, surface breathing
  *   0.14 - 0.30  blast outward, gravity rakes it into a desert dune field
  *   0.30 - 0.33  dune vista holds (camera lifts to a standing-in-the-desert view)
  *   0.33 - 0.93  four text beats — see TEXT_BEATS
- *   0.93 - 1.00  hyper-warp exit as the camera dives through
+ *   0.93 - 1.00  the closing headline simply holds
+ *
+ * There is deliberately no fade-to-black exit. A pinned full-height section still has
+ * to scroll its own screen away after the pin releases, so ending on emptiness buys a
+ * screen and a half of dead black before the next section arrives. Holding the last
+ * headline instead means it physically scrolls off as the next section pushes in.
  */
 export const PARTICLE_PHASES = {
-  sphereIn: { start: 0.0, end: 0.06 },
+  sphereIn: { start: 0.0, end: 0.05 },
   explodeToDunes: { start: 0.14, end: 0.3 },
-  warp: { start: 0.93, end: 1.0 },
-  particleFade: { start: 0.95, end: 1.0 },
 } as const;
 
 /**
  * Ordered text beats. Each morphs in from whatever came before (the dunes for the
  * first, the previous headline afterwards) and then holds dead still to be read.
- * `width` is the target world width of the block — the sampler fits the type to it.
+ *
+ * Lines are kept short on purpose: the type is fitted to the viewport, so fewer
+ * characters per line means larger glyphs and thicker strokes. `linesNarrow` re-breaks
+ * the same words for portrait viewports, where width is the binding constraint.
  */
 export const TEXT_BEATS: {
   lines: string[];
-  width: number;
+  linesNarrow?: string[];
+  /** How far grains scatter mid-morph, in world units, before re-converging. */
+  burst: number;
   morph: { start: number; end: number };
   hold: { start: number; end: number };
 }[] = [
   {
-    lines: ["IN YOUR CONTROL"],
-    width: 100,
+    lines: ["IN YOUR", "CONTROL"],
+    burst: 14,
     morph: { start: 0.33, end: 0.42 },
-    hold: { start: 0.42, end: 0.52 },
+    hold: { start: 0.42, end: 0.53 },
   },
   {
     lines: ["ZERO BRIDGE", "VULNERABILITIES"],
-    width: 86,
-    morph: { start: 0.52, end: 0.58 },
-    hold: { start: 0.58, end: 0.66 },
+    linesNarrow: ["ZERO", "BRIDGE", "VULNERABILITIES"],
+    burst: 22,
+    morph: { start: 0.53, end: 0.59 },
+    hold: { start: 0.59, end: 0.69 },
   },
   {
     lines: ["SOVEREIGN", "WEALTH SHIELD"],
-    width: 80,
-    morph: { start: 0.66, end: 0.72 },
-    hold: { start: 0.72, end: 0.8 },
+    linesNarrow: ["SOVEREIGN", "WEALTH", "SHIELD"],
+    burst: 22,
+    morph: { start: 0.69, end: 0.75 },
+    hold: { start: 0.75, end: 0.85 },
   },
   {
+    // Closing beat. It inherits the old exit warp's drama — a much wider scatter and a
+    // camera push — and then holds to the end instead of blowing out to nothing.
     lines: ["ZERO", "CUSTODY RISK"],
-    width: 80,
-    morph: { start: 0.8, end: 0.86 },
-    hold: { start: 0.86, end: 0.93 },
+    linesNarrow: ["ZERO", "CUSTODY", "RISK"],
+    burst: 48,
+    morph: { start: 0.85, end: 0.93 },
+    hold: { start: 0.93, end: 1.0 },
   },
 ];
 
@@ -81,8 +115,10 @@ const span = (p: number, phase: { start: number; end: number }) =>
 
 const easeInOutCubic = (t: number) =>
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-const easeInCubic = (t: number) => t * t * t;
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+/** Frame-rate independent smoothing factor for a per-frame lerp of strength `k` at 60fps. */
+const smoothK = (k: number, dt: number) => 1 - Math.pow(1 - k, dt * 60);
 
 /**
  * Height of the dune field at a point on the sand plane.
@@ -112,111 +148,125 @@ function resolveHeadingFont(): string {
   return stack || "Georgia, serif";
 }
 
-/**
- * Samples real glyph outlines into particle positions.
- *
- * Rendering the text to an offscreen canvas and reading back its filled pixels gives
- * true letterforms in the brand face for any string. The previous hand-coded stroke
- * maths only covered nine characters and drew them as 1px mathematical lines, which is
- * why the type looked scratchy.
- */
-function sampleTextToPositions(
-  lines: string[],
-  count: number,
-  worldWidth: number,
-  fontStack: string
-): Float32Array {
-  const out = new Float32Array(count * 3);
-  if (typeof document === "undefined") return out;
+/** A sampled headline: glyph grains occupy [0, count), ambient dust fills the rest. */
+type SampledText = { positions: Float32Array; count: number };
 
-  const CANVAS_W = 1600;
-  const LINE_H = 240;
-  const CANVAS_H = LINE_H * lines.length;
+const LINE_RATIO = 1.22; // line height as a multiple of font size
+const RENDER_PX = 240; // canvas font size — sampling resolution, not final scale
+
+/**
+ * Samples real glyph outlines into evenly spaced particle positions.
+ *
+ * Text is drawn to an offscreen canvas in the brand face and read back, so any string
+ * renders as true letterforms. Grains are then picked on a *jittered grid* rather than
+ * by random rejection sampling — random picks clump and leave holes, which is what
+ * makes particle type dissolve into a fuzzy blob. A grid guarantees even coverage.
+ *
+ * Grid spacing is solved from the actual ink area so the headline always consumes
+ * TEXT_SHARE of the budget: raise the grain count and the letters get denser rather
+ * than the leftovers piling up in the dust field.
+ */
+function sampleText(
+  lines: string[],
+  total: number,
+  maxWorldWidth: number,
+  maxWorldHeight: number,
+  fontStack: string
+): SampledText {
+  const positions = new Float32Array(total * 3);
+  if (typeof document === "undefined") return { positions, count: 0 };
+
+  const measure = document.createElement("canvas").getContext("2d");
+  if (!measure) return { positions, count: 0 };
+
+  measure.font = `600 ${RENDER_PX}px ${fontStack}`;
+  const widestPx = Math.max(1, ...lines.map((l) => measure.measureText(l).width));
+
+  // Fit to whichever axis binds first, in world units.
+  const worldSize = Math.min(
+    maxWorldWidth / (widestPx / RENDER_PX),
+    maxWorldHeight / (LINE_RATIO * lines.length)
+  );
+  const scale = worldSize / RENDER_PX;
+
+  const CANVAS_W = Math.ceil(widestPx * 1.08);
+  const CANVAS_H = Math.ceil(RENDER_PX * LINE_RATIO * lines.length);
 
   const canvas = document.createElement("canvas");
   canvas.width = CANVAS_W;
   canvas.height = CANVAS_H;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return out;
+  if (!ctx) return { positions, count: 0 };
 
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
   ctx.fillStyle = "#fff";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  // Not in every 2D context typing yet; harmless where unsupported.
-  try {
-    (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = "0.05em";
-  } catch {
-    /* noop */
-  }
+  ctx.font = `600 ${RENDER_PX}px ${fontStack}`;
+  lines.forEach((line, i) =>
+    ctx.fillText(line, CANVAS_W / 2, RENDER_PX * LINE_RATIO * (i + 0.5))
+  );
 
-  // Fit the widest line to 92% of the canvas, capped so tall lines never collide.
-  const PROBE = 200;
-  ctx.font = `600 ${PROBE}px ${fontStack}`;
-  const widest = Math.max(1, ...lines.map((l) => ctx.measureText(l).width));
-  const size = Math.min(LINE_H * 0.78, PROBE * ((CANVAS_W * 0.92) / widest));
-  ctx.font = `600 ${size}px ${fontStack}`;
-
-  lines.forEach((line, i) => ctx.fillText(line, CANVAS_W / 2, LINE_H * (i + 0.5)));
-
-  // Collect filled pixels on a 2px stride — plenty of resolution, cheap to shuffle.
   const data = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H).data;
-  const filled: number[] = [];
-  for (let y = 0; y < CANVAS_H; y += 2) {
-    for (let x = 0; x < CANVAS_W; x += 2) {
-      if (data[(y * CANVAS_W + x) * 4] > 140) filled.push(x, y);
+  const isInk = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < CANVAS_W && y < CANVAS_H && data[(y * CANVAS_W + x) * 4] > 110;
+
+  // Measure the ink so the grid step can be solved for, rather than guessed at.
+  let inkPx = 0;
+  for (let i = 0; i < data.length; i += 4) if (data[i] > 110) inkPx++;
+  if (!inkPx) return { positions, count: 0 };
+
+  const budget = Math.floor(total * TEXT_SHARE);
+  // step^2 grains-worth of ink per grain => step = sqrt(ink / budget).
+  const step = Math.max(1.15, Math.sqrt(inkPx / budget));
+
+  const pts: number[] = [];
+  for (let gy = step * 0.5; gy < CANVAS_H && pts.length / 2 < budget; gy += step) {
+    for (let gx = step * 0.5; gx < CANVAS_W && pts.length / 2 < budget; gx += step) {
+      const jx = gx + (Math.random() - 0.5) * step * 0.55;
+      const jy = gy + (Math.random() - 0.5) * step * 0.55;
+      // Fall back to the cell centre so thin strokes are never skipped entirely.
+      if (isInk(Math.round(jx), Math.round(jy))) pts.push(jx, jy);
+      else if (isInk(Math.round(gx), Math.round(gy))) pts.push(gx, gy);
     }
   }
 
-  const pixels = filled.length / 2;
-  if (!pixels) return out;
+  const count = Math.min(pts.length / 2, budget);
+  const halfW = CANVAS_W / 2;
+  const halfH = CANVAS_H / 2;
 
-  // Shuffle so particles land evenly across the glyphs. Sampling with replacement
-  // leaves visible clumps and holes at this density.
-  for (let i = pixels - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    const ax = filled[i * 2];
-    const ay = filled[i * 2 + 1];
-    filled[i * 2] = filled[j * 2];
-    filled[i * 2 + 1] = filled[j * 2 + 1];
-    filled[j * 2] = ax;
-    filled[j * 2 + 1] = ay;
-  }
-
-  const scale = worldWidth / CANVAS_W;
   for (let i = 0; i < count; i++) {
-    const p = (i % pixels) * 2;
-    const px = filled[p] + (Math.random() - 0.5) * 2.2;
-    const py = filled[p + 1] + (Math.random() - 0.5) * 2.2;
-
-    out[i * 3] = (px - CANVAS_W / 2) * scale;
-    out[i * 3 + 1] = (CANVAS_H / 2 - py) * scale + 2;
-    out[i * 3 + 2] = (Math.random() - 0.5) * 1.5;
+    positions[i * 3] = (pts[i * 2] - halfW) * scale;
+    positions[i * 3 + 1] = (halfH - pts[i * 2 + 1]) * scale + 2;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 1.2;
   }
 
-  return out;
+  // Ambient dust: parked behind the text plane so it adds depth, never clutter.
+  for (let i = count; i < total; i++) {
+    positions[i * 3] = (Math.random() - 0.5) * maxWorldWidth * 2.8;
+    positions[i * 3 + 1] = (Math.random() - 0.5) * maxWorldHeight * 2.6;
+    positions[i * 3 + 2] = -170 + Math.random() * 140;
+  }
+
+  return { positions, count };
 }
 
 /**
  * GPU-accelerated WebGL particle stage.
  *
  * A lit Fibonacci sphere blows apart into a wind-carved desert dune field, the sand
- * lifts into "IN YOUR CONTROL", then morphs headline to headline before warping past
- * the camera. Every timing lives in PARTICLE_PHASES / TEXT_BEATS.
+ * lifts into "IN YOUR CONTROL", then rebuilds itself headline to headline before
+ * warping past the camera. Every timing lives in PARTICLE_PHASES / TEXT_BEATS; the
+ * type is re-fitted to the viewport on every resize.
  */
 export function CylinderExplosionSphere({
   zoomProgress,
   activeColor = BRAND.leaf,
 }: CylinderExplosionSphereProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-  const pointsRef = useRef<THREE.Points | null>(null);
-  const geometryRef = useRef<THREE.BufferGeometry | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-
   const progressRef = useRef(0);
+
   useEffect(() => {
     progressRef.current = zoomProgress;
   }, [zoomProgress]);
@@ -225,49 +275,65 @@ export function CylinderExplosionSphere({
     const container = containerRef.current;
     if (!container) return;
 
-    const PARTICLE_COUNT = 24000;
-    const SPHERE_R = 31;
-    const DUNE_BASE = -30;
+    // Six figures of grains is comfortable on a desktop GPU but the per-frame maths is
+    // CPU-side, so step down where cores are scarce or we are on a handset.
+    const coarse = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+    const cores = navigator.hardwareConcurrency ?? 4;
+    const COUNT = coarse || cores <= 4 ? GRAINS_LOW : GRAINS_HIGH;
 
     const width = container.clientWidth;
     const height = container.clientHeight;
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1200);
-    camera.position.set(0, 0, 132);
-    cameraRef.current = camera;
+    const camera = new THREE.PerspectiveCamera(FOV, width / height, 0.1, 1200);
+    camera.position.set(0, 0, CAM_Z);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: "high-performance",
+    });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(width, height);
     container.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
 
-    // ─── Soft round sprite so particles read as glowing grains, not squares ───
+    // ─── Grain sprite: hard bright core, short halo. A wide soft falloff is what
+    //     smears neighbouring grains into a single mass, so keep the tail tight. ───
     const sprite = document.createElement("canvas");
-    sprite.width = 32;
-    sprite.height = 32;
+    sprite.width = 64;
+    sprite.height = 64;
     const sctx = sprite.getContext("2d")!;
-    const grad = sctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    const grad = sctx.createRadialGradient(32, 32, 0, 32, 32, 32);
     grad.addColorStop(0, "rgba(255,255,255,1)");
-    grad.addColorStop(0.28, "rgba(255,255,255,0.9)");
-    grad.addColorStop(0.62, "rgba(255,255,255,0.22)");
+    grad.addColorStop(0.45, "rgba(255,255,255,1)");
+    grad.addColorStop(0.66, "rgba(255,255,255,0.5)");
+    grad.addColorStop(0.85, "rgba(255,255,255,0.1)");
     grad.addColorStop(1, "rgba(255,255,255,0)");
     sctx.fillStyle = grad;
-    sctx.fillRect(0, 0, 32, 32);
+    sctx.fillRect(0, 0, 64, 64);
     const particleTexture = new THREE.CanvasTexture(sprite);
 
     // ─── Buffers ───
-    const positions = new Float32Array(PARTICLE_COUNT * 3);
-    const colors = new Float32Array(PARTICLE_COUNT * 3);
-    const normals = new Float32Array(PARTICLE_COUNT * 3); // unit sphere dir, doubles as blast vector
-    const dunePos = new Float32Array(PARTICLE_COUNT * 3);
-    const velocities = new Float32Array(PARTICLE_COUNT);
-    const phases = new Float32Array(PARTICLE_COUNT);
+    const positions = new Float32Array(COUNT * 3);
+    const colors = new Float32Array(COUNT * 3);
+    const normals = new Float32Array(COUNT * 3); // unit dir, doubles as blast vector
+    const dunePos = new Float32Array(COUNT * 3);
+    const velocities = new Float32Array(COUNT);
 
-    const colSphere = new Float32Array(PARTICLE_COUNT * 3);
-    const colSand = new Float32Array(PARTICLE_COUNT * 3);
-    const colText = new Float32Array(PARTICLE_COUNT * 3);
+    // Precomputed trig. At this grain count a Math.sin() per particle per frame is the
+    // single biggest cost in the loop, so every oscillator is expanded with the
+    // angle-addition identity and driven by a handful of per-frame globals instead.
+    const sinP = new Float32Array(COUNT); // sin/cos of the particle's own phase
+    const cosP = new Float32Array(COUNT);
+    const sinK1 = new Float32Array(COUNT); // two travelling waves over the sphere skin
+    const cosK1 = new Float32Array(COUNT);
+    const sinK2 = new Float32Array(COUNT);
+    const cosK2 = new Float32Array(COUNT);
+
+    const colSphere = new Float32Array(COUNT * 3);
+    const colSand = new Float32Array(COUNT * 3);
+    const colText = new Float32Array(COUNT * 3);
+    const colDust = new Float32Array(COUNT * 3);
 
     const cMint = new THREE.Color(BRAND.mint);
     const cLime = new THREE.Color(BRAND.lime);
@@ -276,20 +342,19 @@ export function CylinderExplosionSphere({
     const cDark = new THREE.Color(BRAND.dark);
     const tmp = new THREE.Color();
 
-    // Fake key light for the sphere. Baking a lambert term per particle is what makes
-    // an additive point cloud read as a solid 3D ball instead of a flat blob.
+    // Fake key light. Baking a lambert term per particle is what makes a point cloud
+    // read as a solid 3D ball rather than a flat disc.
     const LX = -0.42;
     const LY = 0.72;
     const LZ = 0.55;
     const LLEN = Math.sqrt(LX * LX + LY * LY + LZ * LZ);
-
     const GOLDEN = Math.PI * (3 - Math.sqrt(5));
 
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
+    for (let i = 0; i < COUNT; i++) {
       const idx = i * 3;
 
       // ── Fibonacci sphere: even coverage, no pole pile-up, no lat/lon moiré ──
-      const ny = 1 - (i / (PARTICLE_COUNT - 1)) * 2;
+      const ny = 1 - (i / (COUNT - 1)) * 2;
       const ring = Math.sqrt(Math.max(0, 1 - ny * ny));
       const theta = GOLDEN * i;
       const nx = Math.cos(theta) * ring;
@@ -299,19 +364,29 @@ export function CylinderExplosionSphere({
       normals[idx + 1] = ny;
       normals[idx + 2] = nz;
 
-      positions[idx] = nx * SPHERE_R;
-      positions[idx + 1] = ny * SPHERE_R;
-      positions[idx + 2] = nz * SPHERE_R;
+      // Seeded at unit scale; the first frame scales these by the fitted radius.
+      positions[idx] = nx;
+      positions[idx + 1] = ny;
+      positions[idx + 2] = nz;
 
       velocities[i] = 0.75 + Math.random() * 1.35;
-      phases[i] = Math.random() * Math.PI * 2;
+
+      const ph = Math.random() * Math.PI * 2;
+      sinP[i] = Math.sin(ph);
+      cosP[i] = Math.cos(ph);
+
+      const k1 = nx * 3.4 + ny * 3.1 + nz * 3.7;
+      const k2 = nx * 2.1 - ny * 4.2 + nz * 1.7;
+      sinK1[i] = Math.sin(k1);
+      cosK1[i] = Math.cos(k1);
+      sinK2[i] = Math.sin(k2);
+      cosK2[i] = Math.cos(k2);
 
       // ── Dune field: scatter across the sand plane, drop onto the height field ──
-      const dx = (Math.random() - 0.5) * 220;
-      const dz = -70 + Math.random() * 140;
+      const dx = (Math.random() - 0.5) * 210;
+      const dz = -52 + Math.random() * 100;
       const h = duneHeight(dx, dz);
-      // Bias toward the surface so we render a skin of sand, not a solid slab.
-      const depth = Math.pow(Math.random(), 1.8) * 6;
+      const depth = Math.pow(Math.random(), 1.8) * 5; // hug the surface, not a solid slab
 
       dunePos[idx] = dx;
       dunePos[idx + 1] = DUNE_BASE + h - depth;
@@ -319,10 +394,10 @@ export function CylinderExplosionSphere({
 
       // ── Sphere palette: lambert-shaded brand green with mint speculars ──
       const lambert = Math.max(0, (nx * LX + ny * LY + nz * LZ) / LLEN);
-      const shade = 0.16 + Math.pow(lambert, 0.75) * 0.84;
-      tmp.copy(cForest).lerp(cLeaf, clamp01(shade * 1.25));
-      if (shade > 0.72) tmp.lerp(cLime, (shade - 0.72) / 0.28);
-      if (Math.random() < 0.05) tmp.lerp(cMint, 0.75); // sparse highlight grains
+      const shade = 0.32 + Math.pow(lambert, 0.75) * 0.68;
+      tmp.copy(cForest).lerp(cLeaf, clamp01(shade * 1.3));
+      if (shade > 0.7) tmp.lerp(cLime, (shade - 0.7) / 0.3);
+      if (Math.random() < 0.06) tmp.lerp(cMint, 0.8); // sparse highlight grains
       colSphere[idx] = tmp.r;
       colSphere[idx + 1] = tmp.g;
       colSphere[idx + 2] = tmp.b;
@@ -339,50 +414,98 @@ export function CylinderExplosionSphere({
       colSand[idx + 1] = tmp.g;
       colSand[idx + 2] = tmp.b;
 
-      // ── Text palette: bright and near-uniform so headlines stay legible ──
+      // ── Text palette: bright brand green. Normal blending means these values are
+      //    what you actually see, so they are kept high in value for legibility. ──
       const t = Math.random();
-      tmp.copy(cLime).lerp(cMint, t * 0.8);
-      if (t < 0.22) tmp.lerp(cLeaf, 0.55);
+      tmp.copy(cLime);
+      if (t > 0.72) tmp.lerp(cMint, 0.85);
+      else if (t < 0.16) tmp.lerp(cLeaf, 0.5);
       colText[idx] = tmp.r;
       colText[idx + 1] = tmp.g;
       colText[idx + 2] = tmp.b;
+
+      // ── Dust palette: same family, way down in value so it never competes ──
+      tmp.copy(cForest).lerp(cLeaf, Math.random() * 0.5);
+      colDust[idx] = tmp.r * 0.5;
+      colDust[idx + 1] = tmp.g * 0.5;
+      colDust[idx + 2] = tmp.b * 0.5;
 
       colors[idx] = colSphere[idx];
       colors[idx + 1] = colSphere[idx + 1];
       colors[idx + 2] = colSphere[idx + 2];
     }
 
-    // ─── Text targets (re-sampled once webfonts settle) ───
-    let textTargets: Float32Array[] = TEXT_BEATS.map((b) =>
-      sampleTextToPositions(b.lines, PARTICLE_COUNT, b.width, resolveHeadingFont())
-    );
+    // ─── Viewport-fitted geometry: sphere radius and text targets ───
+    let sphereR = 31;
+    let fit = { maxW: 100, maxH: 70, narrow: false, font: "Georgia, serif" };
+    let beatCache: (SampledText | null)[] = [];
+    let idleHandle: number | null = null;
+
+    /** Samples one headline, memoised. Cheap after the first call. */
+    const ensureBeat = (i: number): SampledText => {
+      const hit = beatCache[i];
+      if (hit) return hit;
+      const b = TEXT_BEATS[i];
+      const built = sampleText(
+        fit.narrow && b.linesNarrow ? b.linesNarrow : b.lines,
+        COUNT,
+        fit.maxW,
+        fit.maxH,
+        fit.font
+      );
+      beatCache[i] = built;
+      return built;
+    };
+
+    const fitToViewport = () => {
+      const visH = 2 * Math.tan((FOV * Math.PI) / 360) * CAM_Z;
+      const visW = visH * camera.aspect;
+      const narrow = camera.aspect < 1.15;
+
+      sphereR = Math.min(visW, visH) * SPHERE_FILL;
+      fit = {
+        narrow,
+        maxW: visW * (narrow ? 0.92 : 0.84),
+        maxH: visH * 0.6,
+        font: resolveHeadingFont(),
+      };
+
+      beatCache = [];
+      // Only the first headline is needed for a long while; let the browser fold the
+      // rest into idle time so the sphere is never waiting on them.
+      if (idleHandle !== null) cancelIdleCallback?.(idleHandle);
+      idleHandle =
+        typeof requestIdleCallback === "function"
+          ? requestIdleCallback(() => {
+              idleHandle = null;
+              for (let i = 0; i < TEXT_BEATS.length && !disposed; i++) ensureBeat(i);
+            })
+          : (setTimeout(() => {
+              idleHandle = null;
+              for (let i = 0; i < TEXT_BEATS.length && !disposed; i++) ensureBeat(i);
+            }, 400) as unknown as number);
+    };
 
     let disposed = false;
+    fitToViewport();
+
     if (typeof document !== "undefined" && document.fonts?.ready) {
-      document.fonts.ready
-        .then(() => {
-          if (disposed) return;
-          const font = resolveHeadingFont();
-          textTargets = TEXT_BEATS.map((b) =>
-            sampleTextToPositions(b.lines, PARTICLE_COUNT, b.width, font)
-          );
-        })
-        .catch(() => {
-          /* keep the first-pass sampling */
-        });
+      // Re-fit once webfonts settle, otherwise the first pass measures the fallback.
+      document.fonts.ready.then(() => !disposed && fitToViewport()).catch(() => {});
     }
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    geometryRef.current = geometry;
 
     const material = new THREE.PointsMaterial({
-      size: 1.15,
+      size: GRAIN_SIZE,
       vertexColors: true,
       map: particleTexture,
       transparent: true,
-      blending: THREE.AdditiveBlending,
+      // Normal, not additive: additive stacking is what bleached overlapping brand
+      // green into flat white. This keeps every grain its own colour.
+      blending: THREE.NormalBlending,
       opacity: 0,
       depthWrite: false,
       sizeAttenuation: true,
@@ -390,19 +513,22 @@ export function CylinderExplosionSphere({
 
     const points = new THREE.Points(geometry, material);
     scene.add(points);
-    pointsRef.current = points;
 
     // ─── Render loop ───
+    const clock = new THREE.Clock();
+    let frame = 0;
     let time = 0;
     let smoothed = 0;
     let lastSand = -1;
     let lastText = -1;
+    let lastBeat = -2;
 
     const animate = () => {
-      time += 0.016;
+      // Real delta keeps easing and drift identical on 60/120/144Hz displays.
+      const dt = Math.min(0.05, clock.getDelta());
+      time += dt;
 
-      // Ease toward the scroll value so scrubbing feels fluid rather than stepped.
-      smoothed += (progressRef.current - smoothed) * 0.11;
+      smoothed += (progressRef.current - smoothed) * smoothK(0.12, dt);
       const progress = smoothed;
 
       const posAttr = geometry.attributes.position as THREE.BufferAttribute;
@@ -411,7 +537,6 @@ export function CylinderExplosionSphere({
       const colArray = colAttr.array as Float32Array;
 
       const pDunes = easeInOutCubic(span(progress, PARTICLE_PHASES.explodeToDunes));
-      const pWarp = easeInCubic(span(progress, PARTICLE_PHASES.warp));
 
       // Which headline is on screen, and how far through its morph are we?
       let beat = -1;
@@ -422,126 +547,197 @@ export function CylinderExplosionSphere({
         }
       }
       const morphT = beat >= 0 ? easeInOutCubic(span(progress, TEXT_BEATS[beat].morph)) : 0;
-      const src = beat > 0 ? textTargets[beat - 1] : dunePos;
-      const dst = beat >= 0 ? textTargets[beat] : null;
-      const finalText = textTargets[textTargets.length - 1];
+      const cur = beat >= 0 ? ensureBeat(beat) : null;
+      const prev = beat > 0 ? ensureBeat(beat - 1) : null;
+      const src = prev ? prev.positions : dunePos;
+      const dst = cur ? cur.positions : null;
+
+      // Glyph grains live in [0, count). The rest are ambient dust, and the boundary
+      // moves between beats — particles genuinely swap roles as the words rebuild.
+      const nCur = cur ? cur.count : 0;
+      const nPrev = prev ? prev.count : 0;
 
       const textBlend = beat > 0 ? 1 : beat === 0 ? morphT : 0;
       const sandBlend = pDunes * (1 - textBlend);
 
-      material.opacity =
-        progress > PARTICLE_PHASES.particleFade.start
-          ? 1 - span(progress, PARTICLE_PHASES.particleFade)
-          : span(progress, PARTICLE_PHASES.sphereIn);
+      material.opacity = span(progress, PARTICLE_PHASES.sphereIn);
 
-      // ── Camera: lifts into a standing-in-the-desert view, dives through on warp ──
+      // ── Camera: lifts into a standing-in-the-desert view, then pushes in through the
+      //     closing beat's scatter and settles back as the headline locks. ──
       const vista = pDunes * (1 - textBlend);
+      const dive = beat === TEXT_BEATS.length - 1 ? Math.sin(morphT * Math.PI) : 0;
       camera.position.y = vista * 9;
-      camera.position.z = 132 + vista * 12 - pWarp * 112;
+      camera.position.z = CAM_Z + vista * 12 - dive * 62;
       camera.lookAt(0, vista * -7, 0);
-      camera.updateProjectionMatrix();
 
       // ── Sphere turns until the blast; everything after that is locked square-on ──
-      if (pDunes < 1 && pWarp === 0) {
+      if (pDunes < 1) {
         points.rotation.y = time * 0.07 * (1 - pDunes);
         points.rotation.x = time * 0.03 * (1 - pDunes);
       } else {
-        points.rotation.y *= 0.85;
-        points.rotation.x *= 0.85;
+        const damp = smoothK(0.15, dt);
+        points.rotation.y -= points.rotation.y * damp;
+        points.rotation.x -= points.rotation.x * damp;
       }
 
-      for (let i = 0; i < PARTICLE_COUNT; i++) {
-        const idx = i * 3;
-        const nx = normals[idx];
-        const ny = normals[idx + 1];
-        const nz = normals[idx + 2];
-        const vel = velocities[i];
-        const ph = phases[i];
+      // Per-frame oscillator globals — the only trig calls in the whole frame.
+      const shC = Math.cos(time * 1.4);
+      const shS = Math.sin(time * 1.4);
+      const dfC = Math.cos(time * 0.22);
+      const dfS = Math.sin(time * 0.22);
 
-        // 1. Sphere — a smooth breathing skin. Driven off cartesian normals, so it
-        //    never collapses into the lobed polygon that the old spherical harmonics
-        //    produced at low frequency.
-        const skin =
-          Math.sin(nx * 3.4 + time) *
-          Math.cos(ny * 3.1 - time * 0.8) *
-          Math.sin(nz * 3.7 + time * 1.3);
-        const r = SPHERE_R + skin * 1.7 * (1 - pDunes);
+      const holding = beat >= 0 && dst !== null && morphT >= 1;
 
-        let x = nx * r;
-        let y = ny * r;
-        let z = nz * r;
+      if (holding) {
+        // ── Hold path: the headline is locked. Only shimmer and dust drift move, so
+        //    skip the sphere, dune and morph maths entirely for the long readable beats.
+        for (let i = 0; i < COUNT; i++) {
+          const idx = i * 3;
+          const sp = sinP[i];
+          const cp = cosP[i];
 
-        // 2. Sphere -> dune field. The sin() blast arc throws grains out and pulls them
-        //    back; gravity then rakes them down onto the height field. No box clamps —
-        //    those were what squared the cloud off into a wall.
-        if (pDunes > 0) {
-          const blast = Math.sin(pDunes * Math.PI) * 30 * vel;
-          x = x + (dunePos[idx] - x) * pDunes + nx * blast;
-          y = y + (dunePos[idx + 1] - y) * pDunes + ny * blast;
-          z = z + (dunePos[idx + 2] - z) * pDunes + nz * blast;
-
-          if (pDunes > 0.35) {
-            const g = Math.pow((pDunes - 0.35) / 0.65, 2) * 30 * vel;
-            y = Math.max(dunePos[idx + 1], y - g);
+          if (i < nCur) {
+            // Sub-grain shimmer, well below grain spacing, so held type stays sharp
+            // while still reading as living particles.
+            posArray[idx] = dst![idx] + (sp * shC + cp * shS) * 0.12;
+            posArray[idx + 1] = dst![idx + 1] + (cp * shC - sp * shS) * 0.12;
+            posArray[idx + 2] = dst![idx + 2];
+          } else {
+            posArray[idx] = dst![idx] + (sp * dfC + cp * dfS) * 2.4;
+            posArray[idx + 1] = dst![idx + 1] + (cp * dfC - sp * dfS) * 1.8;
+            posArray[idx + 2] = dst![idx + 2];
           }
         }
+      } else {
+        const skinAmp = sphereR * SPHERE_SKIN * (1 - pDunes);
+        const w1C = Math.cos(time);
+        const w1S = Math.sin(time);
+        const w2C = Math.cos(time * 1.3);
+        const w2S = Math.sin(time * 1.3);
+        const beatBurst = beat >= 0 ? TEXT_BEATS[beat].burst : 0;
 
-        // 3. Text beats. Beat 0 lifts off the sand on an updraft; later beats scatter
-        //    radially and re-converge, which reads as the words rebuilding themselves.
-        if (beat >= 0 && dst) {
-          const burst = Math.sin(morphT * Math.PI) * (beat === 0 ? 14 : 22) * vel;
-          const bx = beat === 0 ? Math.cos(ph) * burst * 0.7 : nx * burst;
-          const by = beat === 0 ? burst * 0.9 : ny * burst;
-          const bz = beat === 0 ? Math.sin(ph) * burst * 0.7 : nz * burst;
+        for (let i = 0; i < COUNT; i++) {
+          const idx = i * 3;
+          const nx = normals[idx];
+          const ny = normals[idx + 1];
+          const nz = normals[idx + 2];
+          const vel = velocities[i];
+          const sp = sinP[i];
+          const cp = cosP[i];
 
-          x = src[idx] + (dst[idx] - src[idx]) * morphT + bx;
-          y = src[idx + 1] + (dst[idx + 1] - src[idx + 1]) * morphT + by;
-          z = src[idx + 2] + (dst[idx + 2] - src[idx + 2]) * morphT + bz;
+          // 1. Sphere — two travelling waves over the surface, expanded from
+          //    sin(k + wt) so no trig is needed per particle.
+          let x: number;
+          let y: number;
+          let z: number;
 
-          // Sub-glyph shimmer (0.16 units against ~11 units of cap height) so held text
-          // reads as living grains rather than a frozen bitmap.
-          const sh = 0.16 * morphT * (1 - pWarp);
-          x += Math.sin(time * 1.4 + ph * 3) * sh;
-          y += Math.cos(time * 1.1 + ph * 4) * sh;
+          if (skinAmp > 0) {
+            const skin =
+              (sinK1[i] * w1C + cosK1[i] * w1S) * 0.6 +
+              (sinK2[i] * w2C + cosK2[i] * w2S) * 0.4;
+            const r = sphereR + skin * skinAmp;
+            x = nx * r;
+            y = ny * r;
+            z = nz * r;
+          } else {
+            x = nx * sphereR;
+            y = ny * sphereR;
+            z = nz * sphereR;
+          }
+
+          // 2. Sphere -> dune field. The sin() blast arc throws grains out and pulls
+          //    them back; gravity then rakes them onto the height field. No box clamps —
+          //    those were what squared the cloud off into a wall.
+          if (pDunes > 0) {
+            const blast = Math.sin(pDunes * Math.PI) * 30 * vel;
+            x = x + (dunePos[idx] - x) * pDunes + nx * blast;
+            y = y + (dunePos[idx + 1] - y) * pDunes + ny * blast;
+            z = z + (dunePos[idx + 2] - z) * pDunes + nz * blast;
+
+            if (pDunes > 0.35) {
+              const g = Math.pow((pDunes - 0.35) / 0.65, 2) * 30 * vel;
+              y = Math.max(dunePos[idx + 1], y - g);
+            }
+          }
+
+          // 3. Text beats. Beat 0 lifts off the sand on an updraft; later beats scatter
+          //    radially and re-converge, reading as the words rebuilding themselves.
+          if (beat >= 0 && dst) {
+            const burst = Math.sin(morphT * Math.PI) * beatBurst * vel;
+            const bx = beat === 0 ? cp * burst * 0.7 : nx * burst;
+            const by = beat === 0 ? burst * 0.9 : ny * burst;
+            const bz = beat === 0 ? sp * burst * 0.7 : nz * burst;
+
+            x = src[idx] + (dst[idx] - src[idx]) * morphT + bx;
+            y = src[idx + 1] + (dst[idx + 1] - src[idx + 1]) * morphT + by;
+            z = src[idx + 2] + (dst[idx + 2] - src[idx + 2]) * morphT + bz;
+
+            if (i >= nCur) {
+              x += (sp * dfC + cp * dfS) * 2.4;
+              y += (cp * dfC - sp * dfS) * 1.8;
+            }
+          }
+
+          posArray[idx] = x;
+          posArray[idx + 1] = y;
+          posArray[idx + 2] = z;
         }
-
-        // 4. Warp exit — straight out past the diving camera, with a gravity rake.
-        if (pWarp > 0) {
-          const d = pWarp * 190 * vel;
-          x = finalText[idx] + nx * d + Math.sin(time * 0.5 + ph) * 6 * pWarp;
-          y = finalText[idx + 1] + ny * d - Math.pow(pWarp, 2) * 70 * vel;
-          z = finalText[idx + 2] + nz * d;
-        }
-
-        posArray[idx] = x;
-        posArray[idx + 1] = y;
-        posArray[idx + 2] = z;
       }
 
       posAttr.needsUpdate = true;
 
-      // Palette cross-fade. Only rewritten when the blend actually moved, so during the
-      // long holds this loop is skipped entirely.
-      if (Math.abs(sandBlend - lastSand) > 0.002 || Math.abs(textBlend - lastText) > 0.002) {
-        for (let i = 0; i < PARTICLE_COUNT; i++) {
+      // Palette cross-fade, skipped entirely during the long holds.
+      if (
+        beat !== lastBeat ||
+        Math.abs(sandBlend - lastSand) > 0.002 ||
+        Math.abs(textBlend - lastText) > 0.002
+      ) {
+        for (let i = 0; i < COUNT; i++) {
           const idx = i * 3;
+          // Glyph or dust, cross-faded across the morph so role swaps are invisible.
+          const roleFrom = i < nPrev ? 1 : 0;
+          const roleTo = i < nCur ? 1 : 0;
+          const role = beat > 0 ? roleFrom + (roleTo - roleFrom) * morphT : roleTo;
+
           for (let c = 0; c < 3; c++) {
+            const lit = colDust[idx + c] + (colText[idx + c] - colDust[idx + c]) * role;
             const base =
               colSphere[idx + c] + (colSand[idx + c] - colSphere[idx + c]) * sandBlend;
-            colArray[idx + c] = base + (colText[idx + c] - base) * textBlend;
+            colArray[idx + c] = base + (lit - base) * textBlend;
           }
         }
         colAttr.needsUpdate = true;
         lastSand = sandBlend;
         lastText = textBlend;
+        lastBeat = beat;
       }
 
       renderer.render(scene, camera);
-      animationFrameRef.current = requestAnimationFrame(animate);
+      frame = requestAnimationFrame(animate);
     };
 
-    animate();
+    frame = requestAnimationFrame(animate);
 
+    // ─── Park the loop while the section is off-screen. The stage no longer fades to
+    //     nothing at the end, so without this it would render a static frame forever. ───
+    const visibility = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          if (!frame) {
+            clock.getDelta(); // discard the paused span so nothing jumps on resume
+            frame = requestAnimationFrame(animate);
+          }
+        } else if (frame) {
+          cancelAnimationFrame(frame);
+          frame = 0;
+        }
+      },
+      { rootMargin: "10%" }
+    );
+    visibility.observe(container);
+
+    // ─── Responsive: re-fit the type to the new viewport, debounced ───
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     const handleResize = () => {
       if (!containerRef.current) return;
       const w = containerRef.current.clientWidth;
@@ -549,14 +745,25 @@ export function CylinderExplosionSphere({
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (!disposed) {
+          fitToViewport();
+          lastBeat = -2; // force a palette rebuild against the new grain counts
+        }
+      }, 160);
     };
 
     window.addEventListener("resize", handleResize);
 
     return () => {
       disposed = true;
+      if (idleHandle !== null) cancelIdleCallback?.(idleHandle);
+      visibility.disconnect();
       window.removeEventListener("resize", handleResize);
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (resizeTimer) clearTimeout(resizeTimer);
+      cancelAnimationFrame(frame);
       geometry.dispose();
       material.dispose();
       particleTexture.dispose();

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { FeatureCardGraphic } from "./FeatureCardGraphic";
+import { MemoFeatureCardGraphic } from "./FeatureCardGraphic";
 import type { Feature } from "@/services/landing.service";
 
 export interface Cylinder3DCarouselProps {
@@ -110,7 +110,7 @@ export function Cylinder3DCarousel({
                     isZoomingLastCard ? "z-40" : "z-10"
                   }`}
                 >
-                  <FeatureCardGraphic
+                  <MemoFeatureCardGraphic
                     preset={feature.visualPreset}
                     accentColor={feature.accent}
                     isFront={isFront}
