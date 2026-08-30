@@ -2,6 +2,8 @@
 
 import React, { useRef, useEffect } from "react";
 import * as THREE from "three";
+import { THEME_COLORS } from "@/constants/theme-colors";
+import { TEXT_BEATS } from "./cylinderExplosion.data";
 
 interface CylinderExplosionSphereProps {
   /** 0 -> 1 slice of the pinned Features scroll that belongs to the particle stage. */
@@ -9,13 +11,11 @@ interface CylinderExplosionSphereProps {
   activeColor?: string;
 }
 
-/** Brand palette — mirrors the tokens declared in app/globals.css. */
+/** Brand palette — mirrors the tokens declared in app/globals.css. One hue only:
+ *  every grain is a lightness step between `dark` and `leaf`, never a different hue. */
 const BRAND = {
-  mint: "#d8f3d1",
-  lime: "#c6f19a",
-  leaf: "#66b616",
-  forest: "#22480b",
-  dark: "#122805",
+  leaf: THEME_COLORS.brandLeaf,
+  dark: THEME_COLORS.brandDark,
 } as const;
 
 // ─── Scene constants ────────────────────────────────────────────────────────────
@@ -61,53 +61,6 @@ export const PARTICLE_PHASES = {
   sphereIn: { start: 0.0, end: 0.05 },
   explodeToDunes: { start: 0.14, end: 0.3 },
 } as const;
-
-/**
- * Ordered text beats. Each morphs in from whatever came before (the dunes for the
- * first, the previous headline afterwards) and then holds dead still to be read.
- *
- * Lines are kept short on purpose: the type is fitted to the viewport, so fewer
- * characters per line means larger glyphs and thicker strokes. `linesNarrow` re-breaks
- * the same words for portrait viewports, where width is the binding constraint.
- */
-export const TEXT_BEATS: {
-  lines: string[];
-  linesNarrow?: string[];
-  /** How far grains scatter mid-morph, in world units, before re-converging. */
-  burst: number;
-  morph: { start: number; end: number };
-  hold: { start: number; end: number };
-}[] = [
-  {
-    lines: ["IN YOUR", "CONTROL"],
-    burst: 14,
-    morph: { start: 0.33, end: 0.42 },
-    hold: { start: 0.42, end: 0.53 },
-  },
-  {
-    lines: ["ZERO BRIDGE", "VULNERABILITIES"],
-    linesNarrow: ["ZERO", "BRIDGE", "VULNERABILITIES"],
-    burst: 22,
-    morph: { start: 0.53, end: 0.59 },
-    hold: { start: 0.59, end: 0.69 },
-  },
-  {
-    lines: ["SOVEREIGN", "WEALTH SHIELD"],
-    linesNarrow: ["SOVEREIGN", "WEALTH", "SHIELD"],
-    burst: 22,
-    morph: { start: 0.69, end: 0.75 },
-    hold: { start: 0.75, end: 0.85 },
-  },
-  {
-    // Closing beat. It inherits the old exit warp's drama — a much wider scatter and a
-    // camera push — and then holds to the end instead of blowing out to nothing.
-    lines: ["ZERO", "CUSTODY RISK"],
-    linesNarrow: ["ZERO", "CUSTODY", "RISK"],
-    burst: 48,
-    morph: { start: 0.85, end: 0.93 },
-    hold: { start: 0.93, end: 1.0 },
-  },
-];
 
 /** Normalized 0 -> 1 position of `p` inside a phase window, clamped at both ends. */
 const span = (p: number, phase: { start: number; end: number }) =>
@@ -198,9 +151,9 @@ function sampleText(
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return { positions, count: 0 };
 
-  ctx.fillStyle = "#000";
+  ctx.fillStyle = THEME_COLORS.black;
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-  ctx.fillStyle = "#fff";
+  ctx.fillStyle = THEME_COLORS.white;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = `600 ${RENDER_PX}px ${fontStack}`;
@@ -304,11 +257,11 @@ export function CylinderExplosionSphere({
     sprite.height = 64;
     const sctx = sprite.getContext("2d")!;
     const grad = sctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-    grad.addColorStop(0, "rgba(255,255,255,1)");
-    grad.addColorStop(0.45, "rgba(255,255,255,1)");
-    grad.addColorStop(0.66, "rgba(255,255,255,0.5)");
-    grad.addColorStop(0.85, "rgba(255,255,255,0.1)");
-    grad.addColorStop(1, "rgba(255,255,255,0)");
+    grad.addColorStop(0, `rgba(${THEME_COLORS.whiteRgb},1)`);
+    grad.addColorStop(0.45, `rgba(${THEME_COLORS.whiteRgb},1)`);
+    grad.addColorStop(0.66, `rgba(${THEME_COLORS.whiteRgb},0.5)`);
+    grad.addColorStop(0.85, `rgba(${THEME_COLORS.whiteRgb},0.1)`);
+    grad.addColorStop(1, `rgba(${THEME_COLORS.whiteRgb},0)`);
     sctx.fillStyle = grad;
     sctx.fillRect(0, 0, 64, 64);
     const particleTexture = new THREE.CanvasTexture(sprite);
@@ -335,10 +288,7 @@ export function CylinderExplosionSphere({
     const colText = new Float32Array(COUNT * 3);
     const colDust = new Float32Array(COUNT * 3);
 
-    const cMint = new THREE.Color(BRAND.mint);
-    const cLime = new THREE.Color(BRAND.lime);
     const cLeaf = new THREE.Color(activeColor);
-    const cForest = new THREE.Color(BRAND.forest);
     const cDark = new THREE.Color(BRAND.dark);
     const tmp = new THREE.Color();
 
@@ -392,40 +342,34 @@ export function CylinderExplosionSphere({
       dunePos[idx + 1] = DUNE_BASE + h - depth;
       dunePos[idx + 2] = dz;
 
-      // ── Sphere palette: lambert-shaded brand green with mint speculars ──
+      // ── Sphere palette: one hue only — dark to lit brand-leaf, lambert-shaded ──
       const lambert = Math.max(0, (nx * LX + ny * LY + nz * LZ) / LLEN);
-      const shade = 0.32 + Math.pow(lambert, 0.75) * 0.68;
-      tmp.copy(cForest).lerp(cLeaf, clamp01(shade * 1.3));
-      if (shade > 0.7) tmp.lerp(cLime, (shade - 0.7) / 0.3);
-      if (Math.random() < 0.06) tmp.lerp(cMint, 0.8); // sparse highlight grains
+      const shade = 0.22 + Math.pow(lambert, 0.75) * 0.78;
+      tmp.copy(cDark).lerp(cLeaf, clamp01(shade));
       colSphere[idx] = tmp.r;
       colSphere[idx + 1] = tmp.g;
       colSphere[idx + 2] = tmp.b;
 
-      // ── Sand palette: lit by slope, so crests glow and lee faces fall into shadow ──
+      // ── Sand palette: same hue, lit by slope so crests glow and lee faces shadow ──
       const slope = duneHeight(dx + 4, dz) - duneHeight(dx - 4, dz);
       const lit = clamp01(0.52 - slope * 0.055);
       const crest = clamp01((h + 22) / 44);
       const sand = clamp01(crest * 0.55 + lit * 0.6 - depth * 0.05);
-      tmp.copy(cDark).lerp(cLeaf, clamp01(sand * 1.5));
-      if (sand > 0.6) tmp.lerp(cLime, (sand - 0.6) / 0.4);
-      if (sand > 0.88) tmp.lerp(cMint, (sand - 0.88) / 0.12);
+      tmp.copy(cDark).lerp(cLeaf, clamp01(sand));
       colSand[idx] = tmp.r;
       colSand[idx + 1] = tmp.g;
       colSand[idx + 2] = tmp.b;
 
-      // ── Text palette: bright brand green. Normal blending means these values are
-      //    what you actually see, so they are kept high in value for legibility. ──
-      const t = Math.random();
-      tmp.copy(cLime);
-      if (t > 0.72) tmp.lerp(cMint, 0.85);
-      else if (t < 0.16) tmp.lerp(cLeaf, 0.5);
+      // ── Text palette: bright brand-leaf. Normal blending means these values are
+      //    what you actually see, so they are kept high in value for legibility —
+      //    a little per-grain brightness jitter, never a hue shift. ──
+      tmp.copy(cLeaf).multiplyScalar(0.88 + Math.random() * 0.22);
       colText[idx] = tmp.r;
       colText[idx + 1] = tmp.g;
       colText[idx + 2] = tmp.b;
 
-      // ── Dust palette: same family, way down in value so it never competes ──
-      tmp.copy(cForest).lerp(cLeaf, Math.random() * 0.5);
+      // ── Dust palette: same hue, well down in value so it never competes ──
+      tmp.copy(cDark).lerp(cLeaf, 0.4);
       colDust[idx] = tmp.r * 0.5;
       colDust[idx + 1] = tmp.g * 0.5;
       colDust[idx + 2] = tmp.b * 0.5;
@@ -515,7 +459,7 @@ export function CylinderExplosionSphere({
     scene.add(points);
 
     // ─── Render loop ───
-    const clock = new THREE.Clock();
+    const clock = new THREE.Timer();
     let frame = 0;
     let time = 0;
     let smoothed = 0;
@@ -525,6 +469,7 @@ export function CylinderExplosionSphere({
 
     const animate = () => {
       // Real delta keeps easing and drift identical on 60/120/144Hz displays.
+      clock.update();
       const dt = Math.min(0.05, clock.getDelta());
       time += dt;
 
@@ -724,7 +669,7 @@ export function CylinderExplosionSphere({
       ([entry]) => {
         if (entry.isIntersecting) {
           if (!frame) {
-            clock.getDelta(); // discard the paused span so nothing jumps on resume
+            clock.reset(); // discard the paused span so nothing jumps on resume
             frame = requestAnimationFrame(animate);
           }
         } else if (frame) {

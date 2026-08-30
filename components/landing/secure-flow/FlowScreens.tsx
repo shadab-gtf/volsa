@@ -117,7 +117,7 @@ export function SwapScreen() {
           </div>
         </div>
 
-        <span className="flow-swap-pivot absolute left-1/2 top-1/2 z-10 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-[#0e2004] bg-brand-leaf text-brand-dark">
+        <span className="flow-swap-pivot absolute left-1/2 top-1/2 z-10 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-black bg-brand-leaf text-brand-dark">
           <ArrowSwapVertical size={16} variant="Bold" />
         </span>
 
@@ -314,7 +314,7 @@ export function VaultScreen() {
         <span className="flow-vault-mark relative flex h-24 w-24 items-center justify-center">
           <span className="absolute inset-0 rounded-full border border-brand-lime/15" />
           <span className="absolute inset-[12px] rounded-full border border-brand-lime/25" />
-          <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-b from-[#8FE331] to-[#2c5c0e] text-white shadow-[0_16px_28px_-12px_rgba(18,40,5,0.7)]">
+          <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-b from-brand-glow-bright to-badge-gradient-dark text-white shadow-[0_16px_28px_-12px_rgba(var(--brand-dark-rgb),0.7)]">
             <Lock1 size={26} variant="Bulk" />
           </span>
         </span>

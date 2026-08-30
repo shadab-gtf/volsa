@@ -11,20 +11,14 @@ import {
   ShieldTick,
 } from "iconsax-reactjs";
 import { SECTION_IDS } from "@/constants/landing.constants";
-import {
-  getFlowSteps,
-  getSecurityPillars,
-  type FlowStep,
-} from "@/services/landing.service";
+import { getFlowSteps, type FlowStep } from "@/services/landing.service";
 import { FlowPhone } from "./FlowPhone";
-import { SecurityGlyph } from "./SecurityGlyph";
 import { createFlowFilm, FLOW_CHAPTERS } from "./useFlowFilm";
 import { createScreenPlayer } from "./useFlowScreens";
 
 gsap.registerPlugin(ScrollTrigger);
 
 const steps = getFlowSteps();
-const pillars = getSecurityPillars();
 
 const HEADLINE = ["Your keys", "Your moves"];
 
@@ -88,38 +82,6 @@ export function SecureFlowSection() {
 
     const ctx = gsap.context(() => {
       const q = gsap.utils.selector(section);
-
-      // The 3D marks turn on their own clock. Binding them to scroll would
-      // freeze them the instant the reader stops — which is exactly when they
-      // are being looked at hardest.
-      q<HTMLElement>(".glyph-tilt").forEach((tilt, index) => {
-        gsap.to(tilt, {
-          rotateY: 24,
-          rotateX: -11,
-          duration: 5.5,
-          ease: "sine.inOut",
-          yoyo: true,
-          repeat: -1,
-          delay: index * 0.7,
-        });
-      });
-
-      // Security pillars — an ordinary reveal, below the pinned stage.
-      gsap.from(q(".flow-vouch-intro"), {
-        y: 26,
-        autoAlpha: 0,
-        duration: 0.8,
-        stagger: 0.1,
-        scrollTrigger: { trigger: q(".flow-vouch")[0], start: "top 84%", once: true },
-      });
-      gsap.from(q(".flow-pillar"), {
-        y: 40,
-        autoAlpha: 0,
-        duration: 0.9,
-        stagger: 0.14,
-        ease: "power3.out",
-        scrollTrigger: { trigger: q(".flow-vouch")[0], start: "top 74%", once: true },
-      });
 
       ScrollTrigger.matchMedia({
         // ─── Desktop: one short pin, purely for the type handoff ───
@@ -230,8 +192,8 @@ export function SecureFlowSection() {
   return (
     <section
       ref={sectionRef}
-      id={SECTION_IDS.secureFlow}
-      className="relative w-full bg-gradient-to-b from-[#e9f8d2] via-[#ddf3bb] to-[#eaf8d5] text-brand-forest"
+      id={SECTION_IDS.security}
+      className="relative w-full bg-gradient-to-b from-flow-gradient-1 via-flow-gradient-2 to-flow-gradient-3 text-foreground"
     >
       {/* ─── Handoff stage ───────────────────────────────── */}
       <div
@@ -245,7 +207,7 @@ export function SecureFlowSection() {
             style={{ aspectRatio: "9 / 18.6" }}
             aria-hidden="true"
           />
-          <h2 className="relative text-center font-heading uppercase leading-[0.86] tracking-[-0.02em] text-brand-forest">
+          <h2 className="relative text-center font-heading uppercase leading-[0.86] tracking-[-0.02em] text-foreground">
             {HEADLINE.map((line) => (
               <span key={line} className="block overflow-hidden py-[0.04em]">
                 <span className="flow-type-line block text-[clamp(2.5rem,11vw,9.5rem)] font-normal">
@@ -287,38 +249,14 @@ export function SecureFlowSection() {
 
             {/* Non-custodial badge (Pagination rail removed as requested) */}
             <div className="flow-stage-chrome mx-auto flex w-full max-w-md flex-col items-center mt-2">
-              <span className="flow-secured inline-flex items-center gap-2 rounded-full border border-brand-forest/15 bg-white/80 px-4 py-2 text-center shadow-sm">
+              <span className="flow-secured inline-flex items-center gap-2 rounded-full border border-foreground/15 bg-card/80 px-4 py-2 text-center shadow-sm">
                 <ShieldTick size={14} variant="Bold" className="flex-shrink-0 text-brand-leaf" />
-                <span className="text-[11px] font-sans font-semibold text-brand-forest">
+                <span className="text-[11px] font-sans font-semibold text-foreground">
                   Non-custodial — the keys never left the device
                 </span>
               </span>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* ─── The security case ───────────────────────────── */}
-      <div className="flow-vouch relative mx-auto w-full max-w-7xl px-5 pb-28 pt-24 sm:px-8 lg:pb-36 lg:pt-32">
-        <span className="flow-vouch-intro block text-[11px] font-sans font-bold uppercase tracking-[0.24em] text-brand-leaf">
-          And it stays yours
-        </span>
-        <h2 className="flow-vouch-intro mt-5 max-w-3xl font-heading text-3xl leading-[1.08] tracking-tight text-brand-forest sm:text-4xl lg:text-5xl">
-          Automation you can revoke at any moment
-        </h2>
-
-        <div className="mt-16 grid gap-12 sm:grid-cols-2 lg:grid-cols-3 lg:gap-10">
-          {pillars.map((pillar) => (
-            <div key={pillar.id} className="flow-pillar">
-              <SecurityGlyph glyph={pillar.glyph} />
-              <h3 className="mt-7 font-heading text-xl leading-snug tracking-tight text-brand-forest sm:text-2xl">
-                {pillar.title}
-              </h3>
-              <p className="mt-3 max-w-sm text-sm font-light leading-relaxed text-brand-dark/65">
-                {pillar.description}
-              </p>
-            </div>
-          ))}
         </div>
       </div>
     </section>
@@ -332,7 +270,7 @@ function StepCard({ step, align }: { step: FlowStep; align: "left" | "right" }) 
 
   return (
     <article
-      className={`flow-card relative flex flex-1 min-h-0 flex-col justify-between overflow-hidden rounded-[1.75rem] border border-brand-forest/10 bg-white p-6 sm:p-7 shadow-[0_15px_45px_rgba(18,40,5,0.07)] transition-all duration-300 hover:shadow-[0_25px_60px_rgba(18,40,5,0.13)] hover:-translate-y-1 ${
+      className={`flow-card relative flex flex-1 min-h-0 flex-col justify-between overflow-hidden rounded-[1.75rem] border border-white/10 bg-black p-6 backdrop-blur-xl sm:p-7 shadow-[0_15px_45px_rgba(var(--black-rgb),0.35)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_25px_60px_rgba(var(--black-rgb),0.45)] ${
         align === "right" ? "lg:text-right" : ""
       }`}
     >
@@ -342,21 +280,21 @@ function StepCard({ step, align }: { step: FlowStep; align: "left" | "right" }) 
             align === "right" ? "lg:flex-row-reverse" : ""
           }`}
         >
-          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-[#0a1703] text-brand-lime shadow-sm">
+          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-brand-leaf text-brand-dark">
             <Icon size={17} variant="Linear" />
           </span>
-          <span className="font-sans text-[11px] font-bold uppercase tracking-[0.2em] text-brand-forest/50">
+          <span className="font-sans text-[11px] font-bold uppercase tracking-[0.2em] text-white/50">
             {step.index} · {step.label}
           </span>
         </div>
 
-        <h3 className="mt-4 font-heading text-xl sm:text-2xl leading-[1.15] tracking-tight text-brand-forest">
+        <h3 className="mt-4 font-heading text-xl sm:text-2xl leading-[1.15] tracking-tight text-white">
           {step.title}
         </h3>
       </div>
 
       <div className="flow-card-body mt-4">
-        <p className="text-xs sm:text-sm font-light leading-relaxed text-brand-dark/75">
+        <p className="text-xs sm:text-sm font-light leading-relaxed text-white/70">
           {step.description}
         </p>
         <span className="mt-3 block text-[10px] font-sans font-bold uppercase tracking-[0.18em] text-brand-leaf font-mono">

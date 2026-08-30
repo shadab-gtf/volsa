@@ -27,8 +27,8 @@ export function FlowPhone() {
       />
 
 
-      <div className="relative h-full rounded-[2.8rem] border border-brand-forest/25 bg-[#0a1703] p-[9px] shadow-[0_60px_120px_-40px_rgba(18,40,5,0.55)]">
-        <div className="relative h-full overflow-hidden rounded-[2.35rem] bg-[#0e2004]">
+      <div className="relative h-full rounded-[2.8rem] border border-white/10 bg-black p-[9px] shadow-[0_60px_120px_-40px_rgba(var(--black-rgb),0.55)]">
+        <div className="relative h-full overflow-hidden rounded-[2.35rem] bg-black">
           {/* Status bar */}
           <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-7 pt-3">
             <span className="text-[10px] font-sans font-medium tabular-nums text-white/45">

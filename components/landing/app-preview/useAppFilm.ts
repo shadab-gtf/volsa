@@ -108,7 +108,7 @@ export function useAppFilm(
         master.to(
           q(".film-nav-icon"),
           {
-            color: (i: number) => (i === chapter.nav ? "#C6F19A" : "rgba(255,255,255,0.32)"),
+            color: (i: number) => (i === chapter.nav ? "var(--brand-glow)" : "rgba(var(--white-rgb),0.32)"),
             scale: (i: number) => (i === chapter.nav ? 1.08 : 1),
             duration: 0.4,
           },

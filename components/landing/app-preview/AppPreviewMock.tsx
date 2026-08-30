@@ -37,9 +37,9 @@ export function AppPreviewMock({ className = "" }: { className?: string }) {
       {/* Device frame */}
       <div
         ref={deviceRef}
-        className="relative rounded-[2.7rem] border border-brand-forest/40 bg-[#0a1703] p-[9px] shadow-[0_50px_120px_-45px_rgba(18,40,5,0.7)]"
+        className="relative rounded-[2.7rem] border border-white/10 bg-black p-[9px] shadow-[0_50px_120px_-45px_rgba(var(--black-rgb),0.7)]"
       >
-        <div className="relative aspect-[9/18.6] overflow-hidden rounded-[2.25rem] bg-[#0e2004]">
+        <div className="relative aspect-[9/18.6] overflow-hidden rounded-[2.25rem] bg-black">
           {/* Status bar — persistent chrome, never part of a cut */}
           <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-7 pt-3.5 pb-1">
             <span className="text-[10px] font-sans font-medium text-white/50 tabular-nums">
@@ -56,7 +56,7 @@ export function AppPreviewMock({ className = "" }: { className?: string }) {
           </div>
 
           {/* Bottom bar — persistent chrome */}
-          <div className="absolute inset-x-0 bottom-0 z-10 border-t border-white/[0.06] bg-[#0a1703]/95 px-6 pb-4 pt-3 backdrop-blur-sm">
+          <div className="absolute inset-x-0 bottom-0 z-10 border-t border-white/[0.06] bg-black/95 px-6 pb-4 pt-3 backdrop-blur-sm">
             <div className="flex items-end justify-between">
               {NAV_ITEMS.slice(0, 2).map((NavIcon, index) => (
                 <NavSlot key={index} Icon={NavIcon} />
@@ -70,7 +70,7 @@ export function AppPreviewMock({ className = "" }: { className?: string }) {
 
           {/* Centre action, overlapping the bar like a real app */}
           <div className="absolute bottom-[18px] left-1/2 z-20 -translate-x-1/2">
-            <span className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-brand-leaf text-brand-dark shadow-[0_14px_34px_-8px_rgba(102,182,22,0.95)] ring-[5px] ring-[#0a1703]">
+            <span className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-brand-leaf text-brand-dark shadow-[0_14px_34px_-8px_rgba(var(--brand-leaf-rgb),0.95)] ring-[5px] ring-black">
               <Add size={24} variant="Linear" />
             </span>
           </div>
@@ -95,7 +95,7 @@ function NavSlot({ Icon }: { Icon: Icon }) {
   return (
     <span className="flex flex-col items-center gap-1.5">
       <Icon size={19} className="film-nav-icon text-white/30" />
-      <span className="film-nav-dot h-1 w-1 scale-0 rounded-full bg-brand-lime" />
+      <span className="film-nav-dot h-1 w-1 scale-0 rounded-full bg-brand-leaf" />
     </span>
   );
 }

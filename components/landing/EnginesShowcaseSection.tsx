@@ -1,22 +1,25 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import {
-  Candle2,
-  InfoCircle,
-  Judge,
-  Routing2,
-  ShieldTick,
-  type Icon,
-} from "iconsax-reactjs";
 import { SECTION_IDS } from "@/constants/landing.constants";
 import {
   getEngineHighlights,
   type EngineHighlight,
 } from "@/services/landing.service";
-import { AppPreviewMock } from "./app-preview/AppPreviewMock";
+
+/**
+ * Loaded on demand: a whole second "product film" device (icons, scene
+ * stack, its own GSAP timeline) that only ever needs to exist once this
+ * section is in view — shipping it in the main bundle made every visitor
+ * pay for it on first load, whether they scrolled this far or not.
+ */
+const AppPreviewMock = dynamic(
+  () => import("./app-preview/AppPreviewMock").then((m) => m.AppPreviewMock),
+  { ssr: false }
+);
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -24,35 +27,6 @@ const engines = getEngineHighlights();
 
 const HEADING_WORDS = ["Two", "engines", "that", "never"];
 const HEADING_ACCENT = "sleep";
-
-const TONE_CLASSES: Record<EngineHighlight["tone"], string> = {
-  forest: "bg-[#0c1c07] border-white/10 text-white shadow-[0_20px_50px_rgba(0,0,0,0.85)]",
-  lime: "bg-[#0c1c07] border-white/10 text-white shadow-[0_20px_50px_rgba(0,0,0,0.85)]",
-  dark: "bg-[#0c1c07] border-white/10 text-white shadow-[0_20px_50px_rgba(0,0,0,0.85)]",
-  mint: "bg-[#0c1c07] border-white/10 text-white shadow-[0_20px_50px_rgba(0,0,0,0.85)]",
-};
-
-const TAG_CLASSES: Record<EngineHighlight["tone"], string> = {
-  forest: "text-brand-lime/80",
-  lime: "text-brand-lime/80",
-  dark: "text-brand-lime/80",
-  mint: "text-brand-lime/80",
-};
-
-const BODY_CLASSES: Record<EngineHighlight["tone"], string> = {
-  forest: "text-white/65",
-  lime: "text-white/65",
-  dark: "text-white/65",
-  mint: "text-white/65",
-};
-
-/** One iconsax mark per engine — used on the cards that carry no illustration. */
-const ENGINE_ICONS: Record<EngineHighlight["glyph"], Icon> = {
-  council: Judge,
-  cex: Candle2,
-  dex: Routing2,
-  exit: ShieldTick,
-};
 
 /**
  * Engines showcase — a bento grid built around the app itself.
@@ -85,7 +59,15 @@ export function EnginesShowcaseSection() {
         })
         .from(".engines-intro", { y: 26, opacity: 0, duration: 0.8, stagger: 0.1 }, 0.15)
         .from(
-          ".app-preview",
+          // The wrapper, not `.app-preview` itself: that class lives inside the
+          // dynamically-imported AppPreviewMock, which hasn't necessarily mounted
+          // yet when this timeline is built — GSAP resolves selectors immediately,
+          // so animating a target that doesn't exist yet would silently no-op.
+          // No `clearProps` here: `.app-preview-float` also carries the parallax
+          // scrub tween below (yPercent), which is very likely already running by
+          // the time this entrance finishes — clearing "transform" would wipe that
+          // out too, since GSAP tracks the whole inline transform as one string.
+          ".app-preview-float",
           { y: 72, opacity: 0, scale: 0.965, duration: 1.2, ease: "power4.out" },
           0.1
         )
@@ -113,11 +95,6 @@ export function EnginesShowcaseSection() {
             clearProps: "transform",
           },
           0.55
-        )
-        .from(
-          ".app-preview .film-chapter",
-          { y: 14, opacity: 0, duration: 0.6, stagger: 0.06 },
-          0.75
         );
 
       ScrollTrigger.matchMedia({
@@ -145,27 +122,27 @@ export function EnginesShowcaseSection() {
   return (
     <section
       ref={sectionRef}
-      id={SECTION_IDS.engines}
-      className="relative w-full overflow-hidden bg-[#f2faec] py-24 sm:py-32 px-5 sm:px-8"
+      id={SECTION_IDS.multiChain}
+      className="relative flex w-full flex-col justify-center overflow-hidden bg-surface-tint-c px-5 py-24 sm:px-8 sm:py-32 lg:min-h-svh lg:py-28"
     >
-      {/* Soft brand wash behind the grid */}
+      {/* Soft brand wash behind the grid — one accent, low strength, not a saturated wash */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(70% 50% at 50% 0%, rgba(198,241,154,0.55) 0%, rgba(242,250,236,0) 70%)",
+            "radial-gradient(70% 50% at 50% 0%, rgba(var(--primary-rgb),0.16) 0%, rgba(var(--primary-rgb),0) 70%)",
         }}
         aria-hidden="true"
       />
 
-      <div className="relative z-10 max-w-7xl mx-auto">
+      <div className="relative z-10 max-w-384 mx-auto">
         {/* ─── Heading ─────────────────────────────────────── */}
         <div className="max-w-3xl">
           <span className="engines-intro block text-[11px] font-sans font-bold uppercase tracking-[0.24em] text-brand-leaf">
             Automate anything
           </span>
 
-          <h2 className="mt-5 font-heading text-4xl sm:text-5xl lg:text-6xl leading-[1.06] tracking-tight text-brand-forest flex flex-wrap">
+          <h2 className="mt-5 font-heading text-4xl sm:text-5xl lg:text-6xl leading-[1.06] tracking-tight text-foreground flex flex-wrap">
             {HEADING_WORDS.map((word) => (
               <span
                 key={word}
@@ -181,7 +158,7 @@ export function EnginesShowcaseSection() {
             </span>
           </h2>
 
-          <p className="engines-intro mt-6 text-sm sm:text-base leading-relaxed text-brand-dark/70 font-light max-w-xl">
+          <p className="engines-intro mt-6 text-sm sm:text-base leading-relaxed text-foreground/70 font-light max-w-xl">
             Your capital works both venues at once. The council gates every
             entry, the engines take the trade, and the earnings land back in a
             wallet only you can open.
@@ -223,24 +200,24 @@ function BentoCard({
 }) {
   return (
     <article
-      className="bento-card group relative flex flex-1 min-h-0 flex-col justify-between overflow-hidden rounded-[1.5rem] sm:rounded-[1.75rem] border border-white/10 bg-[#0c1c07] p-6 sm:p-7 text-white shadow-[0_20px_40px_rgba(0,0,0,0.85)] transition-transform duration-500 ease-out will-change-transform hover:-translate-y-1.5"
+      className="bento-card group relative flex flex-1 min-h-0 flex-col justify-between overflow-hidden rounded-[1.5rem] sm:rounded-[1.75rem] border border-border/60 bg-card p-6 sm:p-7 text-card-foreground shadow-[0_20px_40px_rgba(var(--black-rgb),0.35)] transition-transform duration-500 ease-out will-change-transform hover:-translate-y-1.5"
     >
       <div>
-        <h3 className="max-w-[16ch] font-heading text-xl sm:text-2xl leading-[1.15] tracking-tight text-white">
+        <h3 className="max-w-[16ch] font-heading text-xl sm:text-2xl leading-[1.15] tracking-tight text-card-foreground">
           {engine.title}
         </h3>
       </div>
 
       {/* 3D Vector Graphic matching compact specification */}
       <div className="pointer-events-none flex min-h-[95px] flex-1 items-center justify-center py-2 my-auto">
-        <EngineGlyph kind={engine.glyph} tone={engine.tone} />
+        <EngineGlyph kind={engine.glyph} />
       </div>
 
       <div>
-        <p className="text-xs sm:text-sm font-light leading-relaxed text-white/65">
+        <p className="text-xs sm:text-sm font-light leading-relaxed text-card-foreground/65">
           {engine.description}
         </p>
-        <span className="mt-3 block text-[10px] font-sans font-bold uppercase tracking-[0.2em] text-brand-lime/80">
+        <span className="mt-3 block text-[10px] font-sans font-bold uppercase tracking-[0.2em] text-brand-leaf">
           {engine.tag}
         </span>
       </div>
@@ -248,58 +225,18 @@ function BentoCard({
   );
 }
 
-// ─── Iconsax orb (supporting cards) ──────────────────────
-
-function IconOrb({
-  kind,
-  tone,
-}: {
-  kind: EngineHighlight["glyph"];
-  tone: EngineHighlight["tone"];
-}) {
-  const Mark = ENGINE_ICONS[kind];
-  const onDark = tone === "forest" || tone === "dark";
-
-  return (
-    <div className="bento-visual relative flex h-[100px] w-[100px] items-center justify-center">
-      <span
-        className={`absolute inset-0 rounded-full border ${
-          onDark ? "border-brand-lime/15" : "border-brand-forest/[0.12]"
-        }`}
-        aria-hidden="true"
-      />
-      <span
-        className={`absolute inset-[12px] rounded-full border ${
-          onDark ? "border-brand-lime/25" : "border-brand-forest/20"
-        }`}
-        aria-hidden="true"
-      />
-      <span className="relative flex h-[60px] w-[60px] items-center justify-center rounded-full bg-gradient-to-b from-[#8FE331] to-[#2c5c0e] text-white shadow-[0_12px_24px_-10px_rgba(18,40,5,0.55)]">
-        <Mark size={28} variant="Bulk" />
-      </span>
-    </div>
-  );
-}
-
 // ─── Dimensional glyphs (pure SVG — no extra canvases) ───
 
-function EngineGlyph({
-  kind,
-  tone,
-}: {
-  kind: EngineHighlight["glyph"];
-  tone: EngineHighlight["tone"];
-}) {
-  const onDark = tone === "forest" || tone === "dark";
-  const rim = onDark ? "#C6F19A" : "#22480B";
-  const fillTop = onDark ? "#8FE331" : "#66B616";
-  const fillBottom = onDark ? "#22480B" : "#C6F19A";
+function EngineGlyph({ kind }: { kind: EngineHighlight["glyph"] }) {
+  const rim = "var(--primary)";
+  const fillTop = "var(--primary)";
+  const fillBottom = "var(--brand-dark)";
   const id = `glyph-${kind}`;
 
   return (
     <svg
       viewBox="0 0 200 150"
-      className="bento-visual w-[62%] max-w-[160px] drop-shadow-[0_14px_24px_rgba(18,40,5,0.28)]"
+      className="bento-visual w-[62%] max-w-[160px] drop-shadow-[0_14px_24px_rgba(var(--brand-dark-rgb),0.28)]"
       aria-hidden="true"
     >
       <defs>
@@ -308,8 +245,8 @@ function EngineGlyph({
           <stop offset="100%" stopColor={fillBottom} />
         </linearGradient>
         <radialGradient id={`${id}-spec`} cx="0.32" cy="0.28" r="0.6">
-          <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.85" />
-          <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+          <stop offset="0%" stopColor="var(--white)" stopOpacity="0.85" />
+          <stop offset="100%" stopColor="var(--white)" stopOpacity="0" />
         </radialGradient>
       </defs>
 
@@ -427,7 +364,7 @@ function EngineGlyph({
             cy="75"
             rx="40"
             ry="26"
-            stroke="#FFFFFF"
+            stroke="var(--white)"
             strokeOpacity="0.22"
             strokeWidth="2"
             transform="rotate(-18 76 75)"

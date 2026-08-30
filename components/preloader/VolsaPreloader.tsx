@@ -1,42 +1,40 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { setScrollLocked } from "@/components/ui/SmoothScrollProvider";
-import {
-  NUM_COLUMNS,
-  PRELOADER_TIMING,
-  EASINGS,
-} from "./preloader.constants";
-import {
-  initPreloaderSounds,
-  playLogoSound,
-  playBlindsSound,
-} from "./sound";
+import { PRELOADER_TIMING, EASINGS } from "./preloader.constants";
+import { PreloaderCounter, UNIT_PX } from "./PreloaderCounter";
 import "./preloader.css";
 
 interface VolsaPreloaderProps {
   onComplete?: () => void;
 }
 
+/**
+ * The dial counts 0 to 100 once, then the whole overlay dissolves — no wipe,
+ * no wordmark, nothing left to notice on the way out.
+ */
 export default function VolsaPreloader({ onComplete }: VolsaPreloaderProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const logoRef = useRef<HTMLImageElement>(null);
-  const blindsRef = useRef<HTMLDivElement>(null);
+  const widgetRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const numberRef = useRef<HTMLSpanElement>(null);
 
-  const [isCompleted, setIsCompleted] = useState(false);
+  // Read synchronously so a returning visitor never renders the dial at all —
+  // setting this from inside the effect below would flash one frame of it first.
+  const [isCompleted, setIsCompleted] = useState(() => {
+    if (typeof window !== "undefined" && process.env.NODE_ENV === "production") {
+      return sessionStorage.getItem("volsa-preloader-seen") === "true";
+    }
+    return false;
+  });
 
   useEffect(() => {
-    // 1. Session Storage First-Visit Check (Only skip in production)
-    if (typeof window !== "undefined" && process.env.NODE_ENV === "production") {
-      const hasSeen = sessionStorage.getItem("volsa-preloader-seen");
-      if (hasSeen === "true") {
-        setIsCompleted(true);
-        if (onComplete) onComplete();
-        return;
-      }
+    if (isCompleted) {
+      if (onComplete) onComplete();
+      return;
     }
 
     // 2. Prefers Reduced Motion Check
@@ -52,9 +50,6 @@ export default function VolsaPreloader({ onComplete }: VolsaPreloaderProps) {
       }, 500);
       return () => clearTimeout(timer);
     }
-
-    // Initialize Howler sounds
-    initPreloaderSounds();
 
     // Prevent scrolling during the intro. Goes through Lenis — it drives scroll
     // from wheel/touch events, so `body { overflow: hidden }` alone won't hold it.
@@ -74,89 +69,74 @@ export default function VolsaPreloader({ onComplete }: VolsaPreloaderProps) {
         },
       });
 
-      // Initial positions
-      masterTl.set(".volsa-column-bar", {
-        yPercent: 0,
-      });
+      masterTl.set(widgetRef.current, { opacity: 0, y: 16 });
 
-      masterTl.set(logoRef.current, {
-        opacity: 0,
-        scale: 0.9,
-        y: 20,
-      });
-
-      // --- PHASE 1: BRAND LOGO REVEAL ---
-      masterTl.to(logoRef.current, {
+      // --- PHASE 1: DIAL FADES IN ---
+      masterTl.to(widgetRef.current, {
         opacity: 1,
-        scale: 1,
         y: 0,
-        duration: 0.7,
-        ease: "power3.out",
-        onStart: () => {
-          playLogoSound();
+        duration: PRELOADER_TIMING.entranceDuration,
+        ease: EASINGS.entrance,
+      });
+
+      // --- PHASE 2: 0 -> 100, one continuous scroll ---
+      // A proxy value drives both the ruler's translateY and the readout's
+      // text directly — a plain DOM write, not React state, so a ~60fps count
+      // over ~2.5s never triggers a render.
+      const counter = { v: 0 };
+      masterTl.to(counter, {
+        v: 100,
+        duration: PRELOADER_TIMING.counterDuration,
+        ease: EASINGS.counter,
+        onUpdate: () => {
+          if (trackRef.current) {
+            trackRef.current.style.transform = `translateY(${counter.v * UNIT_PX}px)`;
+          }
+          if (numberRef.current) {
+            const shown = Math.min(100, Math.floor(counter.v / 4) * 4);
+            numberRef.current.textContent = String(shown);
+          }
         },
       });
 
-      // --- PHASE 2: LOCKUP HOLD ---
+      // --- PHASE 3: HOLD AT 100 ---
       masterTl.to({}, { duration: PRELOADER_TIMING.holdDuration });
 
-      // --- PHASE 3: VERTICAL VENETIAN BLINDS WIPE EXIT ---
-      masterTl.to(logoRef.current, {
+      // --- PHASE 4a: the dial itself goes first, against still-solid black —
+      // the page underneath must never be visible at the same moment as the
+      // counter, or the two read as one broken, overlapping frame.
+      masterTl.to(widgetRef.current, {
         opacity: 0,
-        scale: 1.05,
-        duration: 0.4,
+        duration: PRELOADER_TIMING.widgetExitDuration,
         ease: "power2.in",
-        onStart: () => {
-          playBlindsSound();
-        },
       });
 
-      // Staggered vertical column bars wipe out of view
-      masterTl.to(
-        ".volsa-column-bar",
-        {
-          yPercent: (index) => (index % 2 === 0 ? -100 : 100),
-          duration: PRELOADER_TIMING.blindsDuration,
-          stagger: {
-            amount: PRELOADER_TIMING.blindsStagger * NUM_COLUMNS,
-            from: "center",
-          },
-          ease: EASINGS.blinds,
-        },
-        "-=0.2"
-      );
+      // --- PHASE 4b: with nothing left on screen but solid black, THAT
+      // dissolves — the only thing the page can ever cross-fade with is an
+      // empty frame. ---
+      masterTl.to(containerRef.current, {
+        opacity: 0,
+        duration: PRELOADER_TIMING.exitFadeDuration,
+        ease: EASINGS.exit,
+      });
     }, containerRef);
 
     return () => {
       setScrollLocked(false);
       ctx.revert();
     };
+    // `isCompleted` is read only for its mount-time value (the lazy initializer
+    // above); it also flips true from inside this same effect's own callbacks,
+    // so tracking it as a dependency would re-run this effect on completion.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onComplete]);
 
   if (isCompleted) return null;
 
   return (
-    <div ref={containerRef} className="volsa-preloader-overlay">
-      {/* Venetian Blinds Column Grid Layer */}
-      <div ref={blindsRef} className="volsa-blinds-container">
-        {Array.from({ length: NUM_COLUMNS }).map((_, i) => (
-          <div key={i} className="volsa-column-bar" />
-        ))}
-      </div>
-
-      {/* Centered VOLSA Brand Logo Image Layer */}
-      <div className="volsa-logo-layer">
-        <div className="volsa-logo-stage">
-          <Image
-            ref={logoRef}
-            src="/images/v-full.png"
-            alt="VOLSA Brand Logo"
-            width={400}
-            height={200}
-            className="w-full max-w-[280px] sm:max-w-[380px] h-auto object-contain drop-shadow-lg"
-            priority
-          />
-        </div>
+    <div ref={containerRef} className="volsa-preloader-overlay bg-black">
+      <div ref={widgetRef} className="flex h-full w-full items-center justify-center">
+        <PreloaderCounter trackRef={trackRef} numberRef={numberRef} />
       </div>
     </div>
   );

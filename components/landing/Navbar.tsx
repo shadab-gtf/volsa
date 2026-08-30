@@ -3,8 +3,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import gsap from "gsap";
-import { NAV_LINKS } from "@/constants/landing.constants";
+import { NAV_CTA, NAV_LINKS } from "@/constants/landing.constants";
 import { usePreloaderDone } from "@/hooks/usePreloaderDone";
+import { useThemeToggle } from "@/hooks/useThemeToggle";
 import {
   scrollToTarget,
   setScrollLocked,
@@ -26,6 +27,7 @@ export function Navbar() {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const { isDark, toggle: toggleTheme } = useThemeToggle();
 
   // Mirrored into a ref so the scroll callback can read it without
   // re-subscribing on every toggle.
@@ -202,7 +204,7 @@ export function Navbar() {
         }}
         className={`fixed top-0 left-0 right-0 z-50 w-full px-6 sm:px-12 py-4 flex items-center justify-between will-change-transform transition-[background-color,border-color,box-shadow,backdrop-filter] duration-500 ease-out ${
           isScrolled && !menuOpen
-            ? "bg-[#f7fdf4]/80 backdrop-blur-md border-b border-brand-forest/10 shadow-[0_1px_24px_-12px_rgba(18,40,5,0.35)]"
+            ? "bg-surface/80 backdrop-blur-md border-b border-brand-forest/10 shadow-[0_1px_24px_-12px_rgba(var(--brand-dark-rgb),0.35)]"
             : "bg-transparent border-b border-transparent shadow-none"
         }`}
       >
@@ -218,24 +220,47 @@ export function Navbar() {
           />
           <span
             className={`font-heading text-2xl sm:text-3xl font-semibold tracking-wider transition-colors duration-300 ${
-              menuOpen ? "text-white" : "text-brand-forest"
+              menuOpen ? "text-white" : "text-foreground"
             }`}
           >
             OLSA
           </span>
         </a>
 
-        {/* Right Side: Get Started CTA + Menu Button */}
+        {/* Right Side: Theme Toggle + Get Started CTA + Menu Button */}
         <div className="flex items-center gap-3 sm:gap-4 z-50">
+          <button
+            onClick={toggleTheme}
+            role="switch"
+            aria-checked={isDark}
+            aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
+            suppressHydrationWarning
+            className={`relative hidden! inline-flex h-11 w-14 shrink-0 items-center border transition-colors duration-300 ease-out cursor-pointer ${
+              menuOpen
+                ? "border-white/30"
+                : isDark
+                  ? "border-brand-leaf/50 bg-brand-dark"
+                  : "border-brand-forest/30 bg-transparent"
+            }`}
+          >
+            <span
+              suppressHydrationWarning
+              className={`absolute left-1 h-8 w-8 transition-transform duration-300 ease-out ${
+                isDark ? "translate-x-6 bg-brand-leaf" : "translate-x-0 bg-brand-forest"
+              } ${menuOpen ? "bg-white!" : ""}`}
+            />
+          </button>
+
           <a
-            href="#"
+            href={NAV_CTA.href}
+            onClick={(event) => handleLinkClick(event, NAV_CTA.href)}
             className={`inline-flex items-center justify-center h-11 px-6 rounded-none text-xs sm:text-sm font-heading font-semibold uppercase tracking-wider leading-none transition-all duration-300 ease-out ${
               menuOpen
                 ? "bg-brand-leaf text-brand-dark hover:bg-brand-lime"
-                : "bg-brand-forest text-white hover:bg-brand-dark shadow-sm hover:shadow"
+                : "bg-primary text-primary-foreground hover:bg-brand-dark shadow-sm hover:shadow"
             }`}
           >
-            Get Started
+            {NAV_CTA.label}
           </a>
 
           <button
@@ -243,7 +268,7 @@ export function Navbar() {
             className={`inline-flex items-center justify-center h-11 px-6 gap-3 rounded-none border text-xs sm:text-sm font-heading font-semibold tracking-wider uppercase leading-none transition-all duration-300 ease-out cursor-pointer ${
               menuOpen
                 ? "bg-white text-brand-dark border-white hover:bg-brand-lime"
-                : "bg-transparent text-brand-forest border-brand-forest/30 hover:bg-brand-forest/10"
+                : "bg-transparent text-foreground border-foreground/30 hover:bg-foreground/10"
             }`}
             aria-label={menuOpen ? "Close menu" : "Open menu"}
             aria-expanded={menuOpen}
@@ -252,12 +277,12 @@ export function Navbar() {
             <span className="flex flex-col justify-center gap-[5px] w-6">
               <span
                 className={`block w-6 h-[1.5px] origin-center transition-transform duration-300 ease-out ${
-                  menuOpen ? "rotate-45 translate-y-[3.5px] bg-brand-dark" : "bg-brand-forest"
+                  menuOpen ? "rotate-45 translate-y-[3.5px] bg-brand-dark" : "bg-foreground"
                 }`}
               />
               <span
                 className={`block w-6 h-[1.5px] origin-center transition-transform duration-300 ease-out ${
-                  menuOpen ? "-rotate-45 -translate-y-[3.5px] bg-brand-dark" : "bg-brand-forest"
+                  menuOpen ? "-rotate-45 -translate-y-[3.5px] bg-brand-dark" : "bg-foreground"
                 }`}
               />
             </span>
@@ -270,7 +295,7 @@ export function Navbar() {
         ref={overlayRef}
         style={{ display: "none" }}
         aria-hidden={!menuOpen}
-        className="fixed inset-0 z-40 w-full h-full bg-[#122805]/95 backdrop-blur-2xl text-white flex flex-col justify-between pt-28 pb-12 px-6 sm:px-16 will-change-[clip-path,opacity]"
+        className="fixed inset-0 z-40 w-full h-full bg-brand-dark/95 backdrop-blur-2xl text-white flex flex-col justify-between pt-28 pb-12 px-6 sm:px-16 will-change-[clip-path,opacity]"
       >
         {/* Menu Links with Clip Path Masking */}
         <div

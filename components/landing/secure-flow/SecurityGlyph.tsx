@@ -66,18 +66,18 @@ function Gradients({ glyph }: { glyph: SecurityPillar["glyph"] }) {
   return (
     <defs>
       <linearGradient id={`sec-body-${glyph}`} x1="0" y1="0" x2="0.35" y2="1">
-        <stop offset="0%" stopColor="#A6F04E" />
-        <stop offset="55%" stopColor="#66B616" />
-        <stop offset="100%" stopColor="#1d3f09" />
+        <stop offset="0%" stopColor="var(--brand-rim)" />
+        <stop offset="55%" stopColor="var(--brand-leaf)" />
+        <stop offset="100%" stopColor="var(--glyph-gradient-dark-3)" />
       </linearGradient>
       <linearGradient id={`sec-face-${glyph}`} x1="0" y1="0" x2="0.5" y2="1">
-        <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.55" />
-        <stop offset="60%" stopColor="#FFFFFF" stopOpacity="0.06" />
-        <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+        <stop offset="0%" stopColor="var(--white)" stopOpacity="0.55" />
+        <stop offset="60%" stopColor="var(--white)" stopOpacity="0.06" />
+        <stop offset="100%" stopColor="var(--white)" stopOpacity="0" />
       </linearGradient>
       <linearGradient id={`sec-back-${glyph}`} x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stopColor="#14300a" />
-        <stop offset="100%" stopColor="#0a1c04" />
+        <stop offset="0%" stopColor="var(--glyph-gradient-dark-2)" />
+        <stop offset="100%" stopColor="var(--glyph-gradient-dark-1)" />
       </linearGradient>
     </defs>
   );
@@ -91,7 +91,7 @@ function fill(variant: Variant, glyph: SecurityPillar["glyph"]) {
 
 function Shape({ glyph, variant }: { glyph: SecurityPillar["glyph"]; variant: Variant }) {
   const paint = fill(variant, glyph);
-  const rim = variant === "body" ? "#C6F19A" : "transparent";
+  const rim = variant === "body" ? "var(--brand-glow)" : "transparent";
 
   return (
     <svg viewBox="0 0 96 96" className="h-full w-full">
@@ -100,7 +100,7 @@ function Shape({ glyph, variant }: { glyph: SecurityPillar["glyph"]; variant: Va
       {glyph === "key" && (
         <g>
           <circle cx="36" cy="38" r="20" fill={paint} stroke={rim} strokeOpacity="0.35" strokeWidth="1.2" />
-          <circle cx="36" cy="38" r="8" fill="#0e2004" opacity={variant === "body" ? 0.85 : 0.25} />
+          <circle cx="36" cy="38" r="8" fill="var(--surface-device-alt)" opacity={variant === "body" ? 0.85 : 0.25} />
           <path
             d="M49 50 L74 75 L74 84 L65 84 L65 77 L58 77 L58 70 L51 70 L44 63 Z"
             fill={paint}
@@ -126,7 +126,7 @@ function Shape({ glyph, variant }: { glyph: SecurityPillar["glyph"]; variant: Va
             <path
               d="M34 47 L44 57 L63 37"
               fill="none"
-              stroke="#0e2004"
+              stroke="var(--surface-device-alt)"
               strokeOpacity="0.8"
               strokeWidth="5"
               strokeLinecap="round"
@@ -154,12 +154,12 @@ function Shape({ glyph, variant }: { glyph: SecurityPillar["glyph"]; variant: Va
             cy="50"
             r="18"
             fill="none"
-            stroke={variant === "body" ? "#0e2004" : rim}
+            stroke={variant === "body" ? "var(--surface-device-alt)" : rim}
             strokeOpacity={variant === "body" ? 0.75 : 0.2}
             strokeWidth="4"
           />
           {variant === "body" && (
-            <g stroke="#0e2004" strokeOpacity="0.75" strokeWidth="4" strokeLinecap="round">
+            <g stroke="var(--surface-device-alt)" strokeOpacity="0.75" strokeWidth="4" strokeLinecap="round">
               <path d="M48 32 L48 24" />
               <path d="M48 68 L48 76" />
               <path d="M66 50 L74 50" />

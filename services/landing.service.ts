@@ -1,31 +1,105 @@
+import { SECTION_IDS } from "@/constants/landing.constants";
+import { THEME_COLORS } from "@/constants/theme-colors";
+
 /**
  * VOLSA Landing Page Data Service
  * All page content is centralized here. Components consume this data only.
  * Future API/CMS migration requires changes only in this file.
  */
 
+export interface CtaLink {
+  label: string;
+  href: string;
+}
+
+export interface Hero {
+  eyebrow: string;
+  /** One entry per rendered line — each gets its own masked reveal. */
+  headline: string[];
+  subhead: string;
+  primaryCta: CtaLink;
+  secondaryCta: CtaLink;
+  /** Control spectrum preview. Renders as a connected strip, any length. */
+  spectrum: string[];
+}
+
+export interface AgentReading {
+  label: string;
+  /** Contribution to the decision layer, 0-100. */
+  value: number;
+}
+
+export interface HeroSignal {
+  pair: string;
+  chain: string;
+  price: string;
+  change: string;
+  action: "BUY" | "SELL" | "HOLD";
+  confidence: number;
+  entry: string;
+  target: string;
+  stop: string;
+  /** Normalised 0-1 samples driving the sparkline. Length is free. */
+  trend: number[];
+  /** Target and stop rails, on the same 0-1 scale as `trend`. */
+  targetAt: number;
+  stopAt: number;
+  agents: AgentReading[];
+}
+
+export interface PlatformComponent {
+  id: string;
+  title: string;
+  description: string;
+}
+
+export interface PlatformOverview {
+  eyebrow: string;
+  /** Authored heading rows — see MaskedHeading. */
+  title: string[];
+  subhead: string;
+  components: PlatformComponent[];
+}
+
+export interface Agent {
+  id: string;
+  name: string;
+  role: string;
+  /**
+   * How this agent's reading is used once the decision layer has it. Architecture, not
+   * performance: what it contributes to the reconciliation, never what it returns.
+   */
+  detail: string;
+  /**
+   * What this agent reads, as bare vocabulary. Not claims and not metrics — three
+   * words that say where the agent is looking. Three is the designed count; the
+   * layout flows if a future agent needs a fourth.
+   */
+  watches: string[];
+}
+
+export interface AiEngine {
+  eyebrow: string;
+  title: string[];
+  subhead: string;
+  agents: Agent[];
+  decision: { title: string; body: string };
+  cadence: { value: string; unit: string; label: string };
+}
+
 export interface Feature {
   id: string;
-  icon: string;
   title: string;
   description: string;
   tag: string;
   stat?: { value: string; label: string };
   visualPreset: "swarm" | "shield" | "router" | "matrix" | "oracle" | "vault";
-  accent: string;
 }
 
 export interface Step {
   number: number;
   title: string;
   description: string;
-}
-
-export interface Stat {
-  label: string;
-  value: number;
-  suffix: string;
-  prefix?: string;
 }
 
 export interface TokenAllocation {
@@ -102,69 +176,57 @@ export function getFeatures(): Feature[] {
   return [
     {
       id: "ai-agents",
-      icon: "🤖",
       title: "Autonomous Intent Swarm",
       description:
         "Adaptive multi-agent consensus operating with zero latency MEV protection and real-time execution.",
-      tag: "MEV Shield · 7 Agents",
+      tag: "MEV Shield · 8 Agents",
       stat: { value: "0.2ms", label: "Consensus Latency" },
       visualPreset: "swarm",
-      accent: "#66b616",
     },
     {
       id: "institutional-shield",
-      icon: "🛡️",
       title: "Institutional ZK Shield",
       description:
         "Private state transitions with cryptographic multi-party computation and revocable permissions.",
       tag: "Zero-Knowledge · MPC",
       stat: { value: "100%", label: "Key Isolation" },
       visualPreset: "shield",
-      accent: "#c6f19a",
     },
     {
       id: "smart-transfers",
-      icon: "⚡",
       title: "Cross-Chain Liquidity Router",
       description:
         "Dynamic gas-optimized pathfinding across 12+ EVM and SVM networks with all-in pricing.",
       tag: "12+ Chains · Optimal Gas",
       stat: { value: "0.01%", label: "Avg Slippage" },
       visualPreset: "router",
-      accent: "#8fe331",
     },
     {
       id: "strategy-builder",
-      icon: "📊",
       title: "Neural Strategy Matrix",
       description:
         "Self-optimizing algorithmic execution models backtested against 10M+ blocks of historical data.",
       tag: "10M+ Blocks · ML Models",
       stat: { value: "99.9%", label: "Uptime SLA" },
       visualPreset: "matrix",
-      accent: "#66b616",
     },
     {
       id: "predictions",
-      icon: "🔮",
       title: "Real-Time Volatility Oracle",
       description:
         "Millisecond-precision sentiment, on-chain depth analysis, and regime detection algorithms.",
       tag: "Sub-Second · Sentiment",
       stat: { value: "24/7", label: "Real-time Telemetry" },
       visualPreset: "oracle",
-      accent: "#c6f19a",
     },
     {
       id: "multi-wallet",
-      icon: "🔐",
       title: "Non-Custodial Key Vault",
       description:
         "Hardware-grade device signing where private keys never leave your possession. Zero custody risk.",
       tag: "Non-Custodial · Biometric",
       stat: { value: "$0", label: "Custody Exposure" },
       visualPreset: "vault",
-      accent: "#8fe331",
     },
   ];
 }
@@ -200,27 +262,16 @@ export function getSteps(): Step[] {
   ];
 }
 
-// ─── STATS ──────────────────────────────────────────────
-
-export function getStats(): Stat[] {
-  return [
-    { label: "Active Wallets", value: 48000, suffix: "+", prefix: "" },
-    { label: "Trading Volume", value: 2.4, suffix: "B", prefix: "$" },
-    { label: "AI Agents Deployed", value: 12500, suffix: "+", prefix: "" },
-    { label: "Strategies Executed", value: 890000, suffix: "+", prefix: "" },
-  ];
-}
-
 // ─── TOKENOMICS ─────────────────────────────────────────
 
 export function getTokenomics(): TokenAllocation[] {
   return [
-    { label: "Community & Rewards", percentage: 35, color: "#66B616" },
-    { label: "Development", percentage: 20, color: "#22480B" },
-    { label: "Liquidity Pool", percentage: 18, color: "#C6F19A" },
-    { label: "Team & Advisors", percentage: 12, color: "#3E7D0F" },
-    { label: "Marketing", percentage: 10, color: "#8FE331" },
-    { label: "Reserve", percentage: 5, color: "#D8F3D1" },
+    { label: "Community & Rewards", percentage: 35, color: THEME_COLORS.brandLeaf },
+    { label: "Development", percentage: 20, color: THEME_COLORS.brandForest },
+    { label: "Liquidity Pool", percentage: 18, color: THEME_COLORS.brandGlow },
+    { label: "Team & Advisors", percentage: 12, color: THEME_COLORS.chartUpAlt },
+    { label: "Marketing", percentage: 10, color: THEME_COLORS.brandGlowBright },
+    { label: "Reserve", percentage: 5, color: THEME_COLORS.brandMist },
   ];
 }
 
@@ -328,15 +379,16 @@ export function getFaq(): FaqItem[] {
 export function getAgentCouncil(): AgentCouncil {
   return {
     pair: "SOL / USDC",
-    consensus: 71,
+    consensus: 75,
     agents: [
-      { name: "Momentum Scanner", vote: "BUY" },
-      { name: "Technical Analyst", vote: "BUY" },
-      { name: "Sentiment Oracle", vote: "BUY" },
-      { name: "Volatility Regime", vote: "BUY" },
-      { name: "Risk Manager", vote: "BUY" },
-      { name: "Order Book Flow", vote: "HOLD" },
-      { name: "LLM Strategist", vote: "HOLD" },
+      { name: "Market Analysis", vote: "BUY" },
+      { name: "Momentum", vote: "BUY" },
+      { name: "Technical Analysis", vote: "BUY" },
+      { name: "Volume and Liquidity", vote: "BUY" },
+      { name: "Risk", vote: "HOLD" },
+      { name: "Sentiment", vote: "BUY" },
+      { name: "Execution", vote: "BUY" },
+      { name: "Portfolio", vote: "HOLD" },
     ],
     preflight: { passed: 15, total: 15 },
     slippageCap: "0.50%",
@@ -353,16 +405,16 @@ export function getEngineHighlights(): EngineHighlight[] {
       title: "A council decides every entry",
       description:
         "Momentum, sentiment, technicals, order flow, volatility and risk each vote with confidence. One strong objection vetoes the trade.",
-      tag: "7 Agents · Weighted consensus",
+      tag: "8 Agents · Weighted consensus",
       glyph: "council",
       tone: "forest",
     },
     {
-      id: "cex",
-      title: "Binance spot, unattended",
+      id: "convert",
+      title: "Cross-chain, near-free",
       description:
-        "A council-gated engine works spot majors around the clock with disciplined sizing, cooldowns and validated order rules.",
-      tag: "CEX Engine",
+        "BSC and Solana balances convert directly into each other at a flat fee near $0.10 — no bridge hops, no exchange stopover.",
+      tag: "~$0.10 · Cross-Chain",
       glyph: "cex",
       tone: "lime",
     },
@@ -490,7 +542,7 @@ export function getSecurityPillars(): SecurityPillar[] {
       glyph: "shield",
       title: "Every entry is gated",
       description:
-        "Seven agents vote, preflight checks run, and one strong objection vetoes the trade before it reaches a venue.",
+        "Eight agents vote, preflight checks run, and one strong objection vetoes the trade before it reaches a venue.",
     },
     {
       id: "vault",
@@ -500,4 +552,320 @@ export function getSecurityPillars(): SecurityPillar[] {
         "Funds can only ever land at destinations you signed for. An agent cannot invent a new one.",
     },
   ];
+}
+
+/**
+ * Hero copy. The headline is authored as lines rather than one string because each
+ * line is revealed independently — where it breaks is a design decision, not a
+ * side effect of the container width.
+ */
+export function getHero(): Hero {
+  return {
+    eyebrow: "BNB Smart Chain · Solana",
+    headline: ["Multi-chain trading,", "with AI you control."],
+    subhead:
+      "Eight specialized agents scan the market every 15 seconds. You decide whether they only advise you, execute inside limits you set, or run the strategy end to end.",
+    primaryCta: { label: "Get Started", href: `#${SECTION_IDS.cta}` },
+    secondaryCta: { label: "Explore the platform", href: `#${SECTION_IDS.platform}` },
+    spectrum: ["You Trade", "AI Assists", "AI Executes"],
+  };
+}
+
+/**
+ * Illustrative signals for the hero panel.
+ *
+ * Deliberately labelled as samples in the UI: the spec is explicit that signals are
+ * system-generated intelligence, never guaranteed outcomes, so a marketing surface
+ * must not imply these are live calls. Shapes match the real signal payload
+ * (§7) so the panel can be pointed at a feed later without a redesign.
+ */
+export function getHeroSignals(): HeroSignal[] {
+  return [
+    {
+      pair: "BTC / USDT",
+      chain: "BNB Smart Chain",
+      price: "64,210.40",
+      change: "+2.84%",
+      action: "BUY",
+      confidence: 82,
+      entry: "64,210",
+      target: "67,900",
+      stop: "62,800",
+      trend: [0.32, 0.3, 0.36, 0.34, 0.41, 0.45, 0.42, 0.5, 0.55, 0.52, 0.58, 0.63, 0.6, 0.68, 0.72, 0.7, 0.78, 0.82, 0.86, 0.92],
+      targetAt: 0.96,
+      stopAt: 0.18,
+      agents: [
+        { label: "Momentum", value: 84 },
+        { label: "Technical", value: 77 },
+        { label: "Liquidity", value: 61 },
+        { label: "Risk", value: 32 },
+      ],
+    },
+    {
+      pair: "SOL / USDT",
+      chain: "Solana",
+      price: "182.65",
+      change: "+0.41%",
+      action: "HOLD",
+      confidence: 46,
+      entry: "—",
+      target: "—",
+      stop: "176.20",
+      trend: [0.55, 0.6, 0.52, 0.58, 0.5, 0.56, 0.62, 0.54, 0.6, 0.52, 0.57, 0.63, 0.55, 0.61, 0.54, 0.59, 0.52, 0.58, 0.55, 0.57],
+      targetAt: 0.82,
+      stopAt: 0.3,
+      agents: [
+        { label: "Momentum", value: 41 },
+        { label: "Technical", value: 52 },
+        { label: "Liquidity", value: 74 },
+        { label: "Risk", value: 48 },
+      ],
+    },
+    {
+      pair: "BNB / USDT",
+      chain: "BNB Smart Chain",
+      price: "598.12",
+      change: "-3.17%",
+      action: "SELL",
+      confidence: 71,
+      entry: "598.12",
+      target: "561.40",
+      stop: "612.90",
+      trend: [0.88, 0.85, 0.9, 0.82, 0.78, 0.8, 0.72, 0.68, 0.71, 0.63, 0.58, 0.61, 0.52, 0.48, 0.5, 0.42, 0.38, 0.4, 0.33, 0.28],
+      targetAt: 0.14,
+      stopAt: 0.95,
+      agents: [
+        { label: "Momentum", value: 24 },
+        { label: "Technical", value: 31 },
+        { label: "Liquidity", value: 66 },
+        { label: "Risk", value: 79 },
+      ],
+    },
+  ];
+}
+
+/**
+ * Platform overview — the six core components from the architecture spec.
+ *
+ * Descriptions stay to a single line each on purpose: this section says what exists,
+ * not how it works. The dedicated sections further down carry the depth, and the six
+ * are rendered as peers because the spec presents them as peers.
+ */
+export function getPlatform(): PlatformOverview {
+  return {
+    eyebrow: "Core platform architecture",
+    title: ["Six systems.", "One trading ecosystem."],
+    subhead:
+      "Not a single trading screen. Custody, intelligence, execution and visibility are separate layers, so each can be upgraded, audited and scaled on its own.",
+    components: [
+      {
+        id: "intelligence",
+        title: "AI Trading Intelligence Layer",
+        description:
+          "The Super Machine — a network of specialised agents feeding one decision layer.",
+      },
+      {
+        id: "wallets",
+        title: "Multi-Chain Wallet Infrastructure",
+        description:
+          "BSC and Solana wallets, browser and external connections, plus platform wallets.",
+      },
+      {
+        id: "engine",
+        title: "Trading Engine",
+        description:
+          "Order creation and execution, stop-loss, take-profit, trailing orders, strategy runs.",
+      },
+      {
+        id: "swap",
+        title: "Multi-Chain Swap Engine",
+        description: "Swaps inside each supported chain, and conversion across them.",
+      },
+      {
+        id: "portfolio",
+        title: "User Portfolio System",
+        description:
+          "Balances, holdings, open positions, profit and loss, and full trading history.",
+      },
+      {
+        id: "alerts",
+        title: "Notifications and Alerts",
+        description: "Real-time alerts across supported devices and notification channels.",
+      },
+    ],
+  };
+}
+
+/** Who carries a stage of the trade in a given mode. */
+export type StageOwner = "you" | "machine" | "shared";
+
+export interface ModeStage {
+  owner: StageOwner;
+  /** What actually happens here, in this mode. */
+  label: string;
+}
+
+export interface TradingMode {
+  id: string;
+  name: string;
+  /** One line. The mode in the fewest words that are still true. */
+  tagline: string;
+  body: string;
+  /** Aligned index-for-index with `TradingModes.stages`. */
+  stages: ModeStage[];
+}
+
+export interface TradingModes {
+  eyebrow: string;
+  title: string[];
+  subhead: string;
+  /** The trade, broken into the stages that can change hands. */
+  stages: string[];
+  modes: TradingMode[];
+}
+
+/**
+ * Trading modes.
+ *
+ * The three modes are not three products — they are one axis, and the only thing that
+ * moves along it is which stages of a trade you keep. So the data is shaped as that
+ * axis: every mode answers the same three questions in the same order, which is what
+ * lets the section show the handover instead of describing it.
+ *
+ * Nothing here promises an outcome. Automation is described as what it does on your
+ * behalf, never as what it earns.
+ */
+export function getTradingModes(): TradingModes {
+  return {
+    eyebrow: "Trading Modes",
+    title: ["You choose how much", "the machine does."],
+    subhead:
+      "The same eight agents run in every mode. What changes is where you stay in the loop — and you can move along that line whenever you want, in either direction.",
+    stages: ["Analyse", "Decide", "Execute"],
+    modes: [
+      {
+        id: "manual",
+        name: "Manual",
+        tagline: "Signals in. Every decision yours.",
+        body:
+          "The agents run and hand you their reconciled call. Nothing is placed on your behalf: you read the signal and you decide whether it becomes a trade.",
+        stages: [
+          { owner: "machine", label: "Eight agents" },
+          { owner: "you", label: "Your call" },
+          { owner: "you", label: "You place it" },
+        ],
+      },
+      {
+        id: "semi",
+        name: "Semi-Automated",
+        tagline: "Prepared for you. Released by you.",
+        body:
+          "The machine sizes and routes the trade, then stops. It waits on your approval, and places nothing until you give it.",
+        stages: [
+          { owner: "machine", label: "Eight agents" },
+          { owner: "shared", label: "Proposed, you approve" },
+          { owner: "machine", label: "Machine places it" },
+        ],
+      },
+      {
+        id: "auto",
+        name: "Fully Automated",
+        tagline: "Runs inside the limits you set.",
+        body:
+          "The machine carries the trade end to end. What it may risk, what it may hold and when it must stand down are yours to define, and it does not step outside them.",
+        stages: [
+          { owner: "machine", label: "Eight agents" },
+          { owner: "machine", label: "Machine decides" },
+          { owner: "machine", label: "Within your limits" },
+        ],
+      },
+    ],
+  };
+}
+
+/**
+ * The Super Machine: its agent network, the decision layer that reconciles them, and
+ * the scan cadence they run on.
+ *
+ * Agent names avoid an ampersand on purpose — the heading face ships no glyph for `&`
+ * (or `%`), and renders a missing-glyph box instead of falling back.
+ */
+export function getAiEngine(): AiEngine {
+  return {
+    eyebrow: "The Super Machine",
+    title: ["Eight specialists.", "One decision."],
+    subhead:
+      "One model asked to weigh momentum, liquidity, risk and sentiment at once judges each of them more shallowly than narrow agents judging them in parallel. So the work is split — and then reconciled.",
+    agents: [
+      {
+        id: "market",
+        name: "Market Analysis",
+        role: "Reads overall market conditions.",
+        detail:
+          "Its read frames everything after it. A setup that looks strong on its own is weighed differently in a market that is turning over.",
+        watches: ["Trend", "Regime", "Breadth"],
+      },
+      {
+        id: "momentum",
+        name: "Momentum",
+        role: "Finds accelerating price movement.",
+        detail:
+          "Direction on its own is not enough. What matters here is whether a move is still building or already spending itself.",
+        watches: ["Velocity", "Acceleration", "Exhaustion"],
+      },
+      {
+        id: "technical",
+        name: "Technical Analysis",
+        role: "Reads indicators and market structure.",
+        detail:
+          "Structure and indicators are read together, so a level only counts when the shape of the market around it agrees.",
+        watches: ["Structure", "Levels", "Indicators"],
+      },
+      {
+        id: "liquidity",
+        name: "Volume and Liquidity",
+        role: "Tracks depth, volume and liquidity shifts.",
+        detail:
+          "A signal the book cannot absorb is not a signal. Depth is checked before size is ever discussed.",
+        watches: ["Depth", "Volume", "Slippage"],
+      },
+      {
+        id: "risk",
+        name: "Risk",
+        role: "Weighs downside and exposure.",
+        detail:
+          "Every candidate reaches the decision layer with its downside stated rather than assumed away.",
+        watches: ["Drawdown", "Exposure", "Correlation"],
+      },
+      {
+        id: "sentiment",
+        name: "Sentiment",
+        role: "Reads market and social sentiment where available.",
+        detail:
+          "Treated as context, not instruction. Crowd positioning is a reason to size differently, not a reason to trade.",
+        watches: ["Social", "Flow", "Positioning"],
+      },
+      {
+        id: "execution",
+        name: "Execution",
+        role: "Decides how a trade should be placed.",
+        detail:
+          "Route and timing are settled per chain, so the same call is placed differently on BNB Smart Chain than on Solana.",
+        watches: ["Routing", "Timing", "Size"],
+      },
+      {
+        id: "portfolio",
+        name: "Portfolio",
+        role: "Watches the account and its strategy allocation.",
+        detail:
+          "Nothing is judged alone. A candidate is measured against what the account already holds and where it is already exposed.",
+        watches: ["Allocation", "Drift", "Rebalance"],
+      },
+    ],
+    decision: {
+      title: "Decision Layer",
+      body: "Eight readings, one call. Conflicting outputs — strong momentum against thin liquidity — are reconciled here into a single signal.",
+    },
+    cadence: { value: "15", unit: "s", label: "Scan cadence" },
+  };
 }

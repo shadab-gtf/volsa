@@ -12,14 +12,15 @@ export function CtaSection() {
   return (
     <section
       id={SECTION_IDS.cta}
-      className="relative w-full overflow-hidden bg-gradient-to-br from-brand-forest via-brand-dark to-brand-forest py-24 sm:py-32 px-5 sm:px-8"
+      className="relative w-full overflow-hidden py-24 sm:py-32 px-5 sm:px-8"
+      style={{ background: "var(--cta-gradient)" }}
     >
       {/* Dot pattern background */}
       <div
         className="absolute inset-0 opacity-[0.04]"
         style={{
           backgroundImage:
-            "radial-gradient(circle, #fff 1px, transparent 1px)",
+            "radial-gradient(circle, var(--white) 1px, transparent 1px)",
           backgroundSize: "24px 24px",
         }}
         aria-hidden="true"

@@ -2,13 +2,26 @@
 
 import React, { useRef, useState, useEffect } from "react";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SECTION_IDS } from "@/constants/landing.constants";
+import { THEME_COLORS } from "@/constants/theme-colors";
 import { getFeatures } from "@/services/landing.service";
 import { Cylinder3DCarousel } from "./Cylinder3DCarousel";
 import { FeaturesMarqueeBackdrop } from "./FeaturesMarqueeBackdrop";
-import { CylinderExplosionSphere, TEXT_BEATS } from "./CylinderExplosionSphere";
+import { TEXT_BEATS } from "./cylinderExplosion.data";
+
+/**
+ * WebGL, loaded on demand: this is a ~100k-particle Three.js scene, and it
+ * only ever mounts once `stageMounted` flips true deep into this section's
+ * scroll — importing it eagerly would ship that whole particle system in
+ * the main bundle for every visitor, most of whom never reach it.
+ */
+const CylinderExplosionSphere = dynamic(
+  () => import("./CylinderExplosionSphere").then((m) => m.CylinderExplosionSphere),
+  { ssr: false }
+);
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -126,24 +139,6 @@ export function FeaturesSection() {
           0.315
         );
       }
-      // Clear the navbar while the section is still approaching, so the frame the pin
-      // engages on carries no other motion.
-      const hideNavbar = () => {
-        const navbar = document.querySelector("nav");
-        if (navbar) {
-          gsap.to(navbar, { yPercent: -120, opacity: 0, duration: 0.45, ease: "power2.out" });
-        }
-      };
-
-      ScrollTrigger.create({
-        trigger: section,
-        start: "top 75%",
-        end: "bottom top",
-        onEnter: hideNavbar,
-        onLeave: hideNavbar,
-        onEnterBack: hideNavbar,
-        onLeaveBack: hideNavbar,
-      });
     }, section);
 
     // No local ScrollTrigger.refresh() here: SmoothScrollProvider already refreshes on
@@ -157,8 +152,8 @@ export function FeaturesSection() {
   return (
     <section
       ref={sectionRef}
-      id={SECTION_IDS.features}
-      className="relative z-10 w-full bg-[#0a1208] overflow-hidden"
+      id={SECTION_IDS.engines}
+      className="relative z-10 w-full bg-surface-panel-features overflow-hidden"
     >
       {/* ─── Pinned Inner Container (GSAP Pin Target) ─── */}
       <div
@@ -181,14 +176,17 @@ export function FeaturesSection() {
           />
 
           {/* Premium Frosted Glass Overlay */}
-          <div className="absolute inset-0 backdrop-blur-[12px] bg-[#0a1208]/55" />
+          <div className="absolute inset-0 backdrop-blur-[12px] bg-surface-panel-features/55" />
+
+          {/* Black Overlay — keeps the photo a backdrop, not the subject */}
+          <div className="absolute inset-0 bg-black/45" />
 
           {/* Soft Edge Feathering */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0a1208]/95 via-transparent to-[#0a1208]/80" />
+          <div className="absolute inset-0 bg-gradient-to-t from-surface-panel-features/95 via-transparent to-surface-panel-features/80" />
 
           {/* Ambient Radial Glow */}
-          <div className="absolute -top-20 -left-20 w-[500px] h-[500px] rounded-full bg-[#66b616]/20 blur-[120px]" />
-          <div className="absolute -bottom-20 -right-20 w-[500px] h-[500px] rounded-full bg-[#c6f19a]/15 blur-[120px]" />
+          <div className="absolute -top-20 -left-20 w-[500px] h-[500px] rounded-full bg-brand-leaf/20 blur-[120px]" />
+          <div className="absolute -bottom-20 -right-20 w-[500px] h-[500px] rounded-full bg-brand-glow/15 blur-[120px]" />
         </div>
 
         {/* ─── Background Monumental Marquee Watermark ─── */}
@@ -221,14 +219,14 @@ export function FeaturesSection() {
         {/* ─── WebGL Particle Stage (headlines are particles, no DOM overlay) ─── */}
         {stageMounted && (
           <div
-            className="absolute inset-0 z-[150] bg-[#050b04] pointer-events-none"
+            className="absolute inset-0 z-[150] bg-surface-deepest pointer-events-none"
             style={{
               // Deep space goes opaque before the sphere blooms, so the dot zoom hands
               // off to black instead of showing the carousel through the particles.
               opacity: particleProgress > 0 ? Math.min(1, particleProgress / 0.045) : 0,
             }}
           >
-            <CylinderExplosionSphere zoomProgress={particleProgress} activeColor="#66b616" />
+            <CylinderExplosionSphere zoomProgress={particleProgress} activeColor={THEME_COLORS.brandLeaf} />
           </div>
         )}
 

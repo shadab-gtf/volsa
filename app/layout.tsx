@@ -58,6 +58,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col font-sans" suppressHydrationWarning>
+        {/* Runs before paint: dark is the default until the user explicitly
+            switches to light — an unset/blocked preference falls back to dark,
+            not light. Keep the storage key in sync with hooks/useThemeToggle.ts. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{if(localStorage.getItem('volsa-theme')!=='light'){document.documentElement.setAttribute('data-theme','dark');}}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();",
+          }}
+        />
         <SmoothScrollProvider>
           <VolsaPreloader />
           {children}

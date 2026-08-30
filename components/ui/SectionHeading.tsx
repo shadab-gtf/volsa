@@ -26,8 +26,8 @@ export function SectionHeading({
   children,
 }: SectionHeadingProps) {
   const alignClass = align === "center" ? "text-center mx-auto" : "text-left";
-  const titleClass = dark ? "text-white" : "text-brand-forest";
-  const subtitleClass = dark ? "text-white/70" : "text-brand-dark/80";
+  const titleClass = dark ? "text-white" : "text-foreground";
+  const subtitleClass = dark ? "text-white/70" : "text-foreground/80";
 
   return (
     <div className={`max-w-3xl ${alignClass} ${className}`}>

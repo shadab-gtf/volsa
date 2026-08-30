@@ -24,13 +24,13 @@ type ButtonProps = ButtonAsButton | ButtonAsLink;
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
-    "bg-brand-forest text-white hover:bg-brand-dark shadow-lg shadow-brand-forest/20 hover:shadow-brand-forest/40",
+    "bg-primary text-primary-foreground hover:bg-brand-dark shadow-lg shadow-primary/20 hover:shadow-primary/40",
   secondary:
     "bg-brand-lime/50 text-brand-forest hover:bg-brand-lime border border-brand-leaf/20",
   outline:
-    "bg-transparent text-brand-forest border-2 border-brand-forest/30 hover:border-brand-forest hover:bg-brand-forest/5",
+    "bg-transparent text-foreground border-2 border-foreground/30 hover:border-foreground hover:bg-foreground/5",
   ghost:
-    "bg-transparent text-brand-forest hover:bg-brand-forest/10",
+    "bg-transparent text-foreground hover:bg-foreground/10",
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {

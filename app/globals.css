@@ -2,12 +2,12 @@
 
 :root {
   /* Brand Green Palette from Theme */
-  --brand-mint: #d8f3d1; /* Pale mint background */
+  --brand-mint: #CEE28B; /* Pale mint background */
   --brand-forest: #22480b; /* Deep dark forest green */
-  --brand-leaf: #66b616; /* Vibrant leaf green */
-  --brand-lime: #c6f19a; /* Soft lime accent green */
+  --brand-leaf: #c0fc01; /* Vibrant leaf green */
+  --brand-lime: #CEE28B; /* Soft lime accent green */
   --brand-dark: #122805; /* Ultra dark forest for text/contrast */
-
+  
   /* Semantic Theme Variables */
   --background: var(--brand-mint);
   --foreground: var(--brand-dark);
@@ -28,6 +28,197 @@
   --muted-foreground: #2a5212;
 
   --border: #bbe7af;
+
+  /* The page's own ground. Lighter than --background, and fixed: the landing page is
+     light-only, so this must not follow the viewer's OS the way --background does. */
+  --surface: #f7fdf4;
+
+  /*
+   * Signal states.
+   *
+   * The one place the palette steps outside the greens, because a trader has to tell
+   * buy from sell at a glance and hue is what carries that. The two warm tones are
+   * pulled toward the brand's yellow-green rather than taken off a stock ramp.
+   *
+   * Each is dark enough to carry white text at 4.5:1 and to be read as text on the
+   * card. That is why "up" is not brand-leaf: leaf on white is 2.5:1, which looks
+   * right and cannot be read. Leaf survives as the soft end of the gradients, where
+   * nothing has to be legible.
+   */
+  --signal-up: #3f780d;
+  --signal-up-soft: var(--brand-leaf);
+  --signal-down: #b3350f;
+  --signal-down-soft: #e0a68d;
+  --signal-flat: #8a6508;
+  --signal-flat-soft: #d9c384;
+
+  /* RGB triplets, for building rgba()/gradient stops with a variable alpha.
+     Keep every triplet in sync with its hex twin above. */
+  --brand-forest-rgb: 34, 72, 11;
+  --brand-leaf-rgb: 192, 252, 1;
+  --brand-dark-rgb: 18, 40, 5;
+  --surface-rgb: 247, 253, 244;
+  --white-rgb: 255, 255, 255;
+  --black-rgb: 0, 0, 0;
+
+  /* Generic neutrals, for decorative/canvas/SVG use that is deliberately
+     colorless rather than tinted with the brand green (mask luminance,
+     canvas clears, hairline strokes). */
+  --white: #ffffff;
+  --black: #000000;
+
+  /*
+   * Glow accent family.
+   *
+   * A second, brighter step above --brand-leaf used across hero glows, chart
+   * "up" gradients and device-mockup highlights. Distinct from --brand-mint/
+   * --brand-lime, which are the pale background tint, not a glow.
+   */
+  --brand-glow: #c6f19a;
+  --brand-glow-rgb: 198, 241, 154;
+  --brand-glow-bright: #8fe331;
+  --brand-glow-bright-rgb: 143, 227, 49;
+  --brand-glow-soft: #9adc4a;
+  --brand-glow-soft-rgb: 154, 220, 74;
+  --brand-rim: #a6f04e;
+  --brand-mist: #d8f3d1;
+  --brand-mist-rgb: 216, 243, 209;
+  --brand-slate: #899089;
+  --brand-slate-rgb: 137, 144, 137;
+
+  /* Preloader logo mark's own shine gradient — brand-adjacent but only ever
+     used on the logo, never as a UI color. */
+  --brand-logo-light: #7acc22;
+  --brand-logo-mid: #4da012;
+  --brand-logo-dark: #3a7210;
+
+  /* Chart/mock accents distinct from the real --signal-* colors above —
+     used inside decorative phone-mockup UI, not live trading state. */
+  --chart-up-alt: #3e7d0f;
+  --chart-down-mock: #3f7a1a;
+
+  /* Device-mockup and panel "depth" darks. Many near-black greens, each
+     hand-picked per component for gradient/vignette depth — kept as
+     distinct tokens (rather than collapsed into one) so existing gradients
+     keep their depth, while still being named and centralized here. */
+  --surface-device: #0a1703;
+  --surface-device-alt: #0e2004;
+  --surface-panel: #0c1c07;
+  --surface-panel-carousel: #060e03;
+  --surface-panel-carousel-alt: #040a02;
+  --surface-panel-deep: #030702;
+  --surface-panel-carousel3d: #0b1607;
+  --shadow-carousel-rgb: 10, 24, 6;
+  --vignette-carousel-rgb: 14, 35, 8;
+  --surface-gradient-1: #14260d;
+  --surface-gradient-2: #0d1c08;
+  --surface-gradient-3: #071004;
+  --surface-deepest: #050b04;
+  --surface-panel-features: #0a1208;
+  --surface-canvas-bg: #08110a;
+  --surface-platform: #0a1405;
+  --glyph-gradient-dark-1: #0a1c04;
+  --glyph-gradient-dark-2: #14300a;
+  --glyph-gradient-dark-3: #1d3f09;
+  --sphere-emissive: #121913;
+  --sphere-emissive-alt: #050d06;
+  --sphere-front: #0c170a;
+  --sphere-back: #081007;
+  --network-dim: #1f4a0c;
+  --network-pale: #4a6b32;
+  --badge-gradient-dark: #2c5c0e;
+  --ambient-light: #eef8ea;
+
+  /* Pale-green surface tints, distinct from --muted/--surface. */
+  --surface-tint-a: #eef7e0;
+  --surface-tint-b: #eaf7e2;
+  --surface-tint-c: #f2faec;
+  --surface-tint-c-rgb: 242, 250, 236;
+  --flow-gradient-1: #e9f8d2;
+  --flow-gradient-2: #ddf3bb;
+  --flow-gradient-3: #eaf8d5;
+
+  /*
+   * Footer's own neutral palette for text and its SOC trust badge — the
+   * ambient glow and its one accent icon read off `--primary`/`--primary-rgb`
+   * instead, the same single-hue blob every other section uses.
+   */
+  --footer-bg: #e4e9e0;
+  --footer-fg: #111111;
+  --footer-neutral-100: #f3f4f6;
+  --footer-neutral-200: #e5e7eb;
+  --footer-neutral-300: #d1d5db;
+  --footer-neutral-400: #9ca3af;
+  --footer-neutral-500: #6b7280;
+  --footer-neutral-600: #4b5563;
+  --footer-neutral-700: #374151;
+  --footer-neutral-800: #1f2937;
+  --footer-neutral-900: #111827;
+
+  /*
+   * Full gradient recipes for the hero/ambient "glass over glow" backdrops,
+   * kept as whole custom properties (not just color tokens) so the dark
+   * theme can swap the entire wash — a light haze reads as fog on black —
+   * while the components that consume them stay untouched.
+   */
+  --hero-mesh: linear-gradient(
+    180deg,
+    rgba(var(--brand-glow-rgb), 0.9) 0%,
+    rgba(var(--brand-mist-rgb), 0.6) 45%,
+    rgba(var(--surface-rgb), 1) 100%
+  );
+  --hero-veil: linear-gradient(
+    180deg,
+    rgba(var(--white-rgb), 0.34) 0%,
+    rgba(var(--white-rgb), 0.2) 40%,
+    rgba(var(--white-rgb), 0.46) 100%
+  );
+  --ambient-veil: linear-gradient(
+    180deg,
+    rgba(var(--white-rgb), 0.36) 0%,
+    rgba(var(--white-rgb), 0.18) 45%,
+    rgba(var(--white-rgb), 0.5) 100%
+  );
+
+  /* Tracks --primary's current color as an rgba()-usable triplet. */
+  --primary-rgb: var(--brand-forest-rgb);
+
+  /* AmbientField's four drifting blobs (AI Engine section), as their own
+     tokens so dark mode can collapse them to one consistent color instead
+     of the light theme's leaf/glow-soft/forest/mist mix. */
+  --ambient-blob-1-rgb: var(--brand-leaf-rgb);
+  --ambient-blob-2-rgb: var(--brand-glow-soft-rgb);
+  --ambient-blob-3-rgb: var(--brand-forest-rgb);
+  --ambient-blob-4-rgb: var(--brand-mist-rgb);
+
+  /* Hero's three drifting glow blobs, as whole gradients so the dark theme
+     can drop two of them entirely rather than just recoloring — one clean
+     glow reads as intentional, three overlapping ones reads as haze. */
+  --hero-blob-1: radial-gradient(
+    circle,
+    rgba(var(--brand-leaf-rgb), 0.55) 0%,
+    rgba(var(--brand-leaf-rgb), 0.22) 42%,
+    rgba(var(--brand-leaf-rgb), 0) 70%
+  );
+  --hero-blob-2: radial-gradient(
+    circle,
+    rgba(var(--brand-glow-soft-rgb), 0.6) 0%,
+    rgba(var(--brand-glow-rgb), 0.26) 45%,
+    rgba(var(--brand-glow-rgb), 0) 70%
+  );
+  --hero-blob-3: radial-gradient(
+    circle,
+    rgba(var(--brand-forest-rgb), 0.34) 0%,
+    rgba(var(--brand-forest-rgb), 0.12) 45%,
+    rgba(var(--brand-forest-rgb), 0) 70%
+  );
+
+  --cta-gradient: linear-gradient(
+    to bottom right,
+    var(--brand-forest),
+    var(--brand-dark),
+    var(--brand-forest)
+  );
 }
 
 @theme inline {
@@ -51,24 +242,206 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
+  --color-surface: var(--surface);
+
+  --color-signal-up: var(--signal-up);
+  --color-signal-up-soft: var(--signal-up-soft);
+  --color-signal-down: var(--signal-down);
+  --color-signal-down-soft: var(--signal-down-soft);
+  --color-signal-flat: var(--signal-flat);
+  --color-signal-flat-soft: var(--signal-flat-soft);
+
+  --color-white: var(--white);
+  --color-black: var(--black);
+
+  --color-brand-glow: var(--brand-glow);
+  --color-brand-glow-bright: var(--brand-glow-bright);
+  --color-brand-glow-soft: var(--brand-glow-soft);
+  --color-brand-rim: var(--brand-rim);
+  --color-brand-mist: var(--brand-mist);
+  --color-brand-slate: var(--brand-slate);
+
+  --color-brand-logo-light: var(--brand-logo-light);
+  --color-brand-logo-mid: var(--brand-logo-mid);
+  --color-brand-logo-dark: var(--brand-logo-dark);
+
+  --color-chart-up-alt: var(--chart-up-alt);
+  --color-chart-down-mock: var(--chart-down-mock);
+
+  --color-surface-device: var(--surface-device);
+  --color-surface-device-alt: var(--surface-device-alt);
+  --color-surface-panel: var(--surface-panel);
+  --color-surface-panel-carousel: var(--surface-panel-carousel);
+  --color-surface-panel-carousel-alt: var(--surface-panel-carousel-alt);
+  --color-surface-panel-deep: var(--surface-panel-deep);
+  --color-surface-panel-carousel3d: var(--surface-panel-carousel3d);
+  --color-surface-gradient-1: var(--surface-gradient-1);
+  --color-surface-gradient-2: var(--surface-gradient-2);
+  --color-surface-gradient-3: var(--surface-gradient-3);
+  --color-surface-deepest: var(--surface-deepest);
+  --color-surface-panel-features: var(--surface-panel-features);
+  --color-surface-canvas-bg: var(--surface-canvas-bg);
+  --color-surface-platform: var(--surface-platform);
+  --color-glyph-gradient-dark-1: var(--glyph-gradient-dark-1);
+  --color-glyph-gradient-dark-2: var(--glyph-gradient-dark-2);
+  --color-glyph-gradient-dark-3: var(--glyph-gradient-dark-3);
+  --color-sphere-emissive: var(--sphere-emissive);
+  --color-sphere-emissive-alt: var(--sphere-emissive-alt);
+  --color-sphere-front: var(--sphere-front);
+  --color-sphere-back: var(--sphere-back);
+  --color-network-dim: var(--network-dim);
+  --color-network-pale: var(--network-pale);
+  --color-badge-gradient-dark: var(--badge-gradient-dark);
+  --color-ambient-light: var(--ambient-light);
+
+  --color-surface-tint-a: var(--surface-tint-a);
+  --color-surface-tint-b: var(--surface-tint-b);
+  --color-surface-tint-c: var(--surface-tint-c);
+  --color-flow-gradient-1: var(--flow-gradient-1);
+  --color-flow-gradient-2: var(--flow-gradient-2);
+  --color-flow-gradient-3: var(--flow-gradient-3);
+
+  --color-footer-bg: var(--footer-bg);
+  --color-footer-fg: var(--footer-fg);
+  --color-footer-neutral-100: var(--footer-neutral-100);
+  --color-footer-neutral-200: var(--footer-neutral-200);
+  --color-footer-neutral-300: var(--footer-neutral-300);
+  --color-footer-neutral-400: var(--footer-neutral-400);
+  --color-footer-neutral-500: var(--footer-neutral-500);
+  --color-footer-neutral-600: var(--footer-neutral-600);
+  --color-footer-neutral-700: var(--footer-neutral-700);
+  --color-footer-neutral-800: var(--footer-neutral-800);
+  --color-footer-neutral-900: var(--footer-neutral-900);
 
   --font-sans:
     var(--font-gsans), var(--font-poppins-web), system-ui, -apple-system,
     sans-serif;
-  --font-heading: var(--font-morona), var(--font-alice-web), Georgia, serif;
+  --font-heading: var(--font-gsans), var(--font-gsans), Georgia, serif;
+  /* --font-heading: var(--font-morona), var(--font-alice-web), Georgia, serif; */
   --font-poppins: var(--font-poppins-web), sans-serif;
   --font-alice: var(--font-alice-web), serif;
   --font-serif: Georgia, "Times New Roman", serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: var(--brand-dark);
-    --foreground: #eefbea;
-    --card: #183309;
-    --card-foreground: #eefbea;
-    --border: #2e5a13;
-  }
+/*
+ * Manual dark theme, switched by the header toggle (never by OS preference —
+ * a trading dashboard shouldn't silently flip on the viewer behind their
+ * back). Built from exactly four colors: black, white, the existing brand
+ * lime, and one new muted slate. Structure carries the rest: --muted stays
+ * the same black as --background, separated only by a --border hairline,
+ * matching how the rest of this palette favors hairlines over filled panels.
+ */
+:root[data-theme="dark"] {
+  --background: #000000;
+  --foreground: #ffffff;
+
+  --card: #000000;
+  --card-foreground: #ffffff;
+
+  --primary: var(--brand-leaf);
+  --primary-foreground: #000000;
+
+  --secondary: var(--brand-slate);
+  --secondary-foreground: #ffffff;
+
+  --accent: var(--brand-leaf);
+  --accent-foreground: #000000;
+
+  --muted: #000000;
+  --muted-foreground: var(--brand-slate);
+
+  --border: var(--brand-slate);
+
+  --surface: #000000;
+
+  /* Sections that were always "dark by design" (Trading Modes, How It Works,
+     Platform, Features) render that fixed look via --brand-dark or a
+     surface-panel/-platform literal, not the semantic tokens above — so on
+     their own they never join the black/white/lime/slate system. Overriding
+     the literals themselves makes every one of them resolve to the same
+     black, with no per-component changes needed. */
+  --brand-dark: #000000;
+  --brand-dark-rgb: 0, 0, 0;
+  --surface-platform: #000000;
+  --surface-panel-features: #000000;
+  --surface-deepest: #000000;
+  --surface-panel-carousel: #000000;
+  --surface-panel-carousel-alt: #000000;
+  --surface-panel-deep: #000000;
+  --surface-tint-c: #000000;
+  --cta-gradient: var(--background);
+
+  /* Sections whose root background was a fixed light literal (not one of the
+     9 semantic tokens above) get their own dark override here, so no
+     component code has to branch on the theme. */
+  --surface-tint-a: #000000;
+  --flow-gradient-1: var(--surface-deepest);
+  --flow-gradient-2: var(--surface-panel-features);
+  --flow-gradient-3: var(--surface-device);
+
+  /* Hero/ambient washes: dark mode is black first — a bright haze reads as
+     fog, so the mesh stays near-black. Two of the three blobs survive,
+     both recolored to --primary (the brand lime) rather than the light
+     theme's leaf/glow-soft mix, pushed bright enough to actually read
+     against black; the third stays off. The veil becomes a thin glass
+     sheen (a soft white highlight up top, easing into a black vignette)
+     rather than a flat tint — that's the "glass" quality on a black
+     ground. */
+  --primary-rgb: var(--brand-leaf-rgb);
+
+  /* One consistent glow, not a four-color mix. */
+  --ambient-blob-1-rgb: var(--primary-rgb);
+  --ambient-blob-2-rgb: var(--primary-rgb);
+  --ambient-blob-3-rgb: var(--primary-rgb);
+  --ambient-blob-4-rgb: var(--primary-rgb);
+
+  --hero-mesh: linear-gradient(
+    180deg,
+    rgba(var(--brand-leaf-rgb), 0.05) 0%,
+    rgba(var(--black-rgb), 0.7) 45%,
+    rgba(var(--black-rgb), 1) 100%
+  );
+  --hero-blob-1: radial-gradient(
+    circle,
+    rgba(var(--primary-rgb), 0.75) 0%,
+    rgba(var(--primary-rgb), 0.34) 42%,
+    rgba(var(--primary-rgb), 0) 70%
+  );
+  --hero-blob-2: radial-gradient(
+    circle,
+    rgba(var(--primary-rgb), 0.75) 0%,
+    rgba(var(--primary-rgb), 0.34) 45%,
+    rgba(var(--primary-rgb), 0) 70%
+  );
+  --hero-blob-3: none;
+  --hero-veil: linear-gradient(
+    180deg,
+    rgba(var(--white-rgb), 0.07) 0%,
+    rgba(var(--white-rgb), 0.02) 40%,
+    rgba(var(--black-rgb), 0.35) 100%
+  );
+  --ambient-veil: linear-gradient(
+    180deg,
+    rgba(var(--black-rgb), 0.12) 0%,
+    rgba(var(--black-rgb), 0.06) 45%,
+    rgba(var(--black-rgb), 0.32) 100%
+  );
+
+  /* Footer: still its own neutral (non-brand-green) palette, just inverted —
+     the 100..900 ramp flips direction so text calibrated for a light ground
+     stays legible on black, and the AICPA badge's gradient still reads as
+     a metallic shine either way. */
+  --footer-bg: #000000;
+  --footer-fg: #ffffff;
+  --footer-neutral-100: #111827;
+  --footer-neutral-200: #1f2937;
+  --footer-neutral-300: #374151;
+  --footer-neutral-400: #4b5563;
+  --footer-neutral-500: #6b7280;
+  --footer-neutral-600: #9ca3af;
+  --footer-neutral-700: #d1d5db;
+  --footer-neutral-800: #e5e7eb;
+  --footer-neutral-900: #f3f4f6;
 }
 
 /* Hide scrollbars globally while preserving scroll functionality */
@@ -222,6 +595,21 @@ h3 {
 
   .flow-stage {
     padding-bottom: 6rem !important;
+  }
+}
+
+/* How-it-works: reduced motion never engages the pin, but the track is still
+   a non-wrapping flex row wider than the viewport — give it back its own
+   native scroll so every card stays reachable instead of clipped forever by
+   the section's overflow-hidden. */
+@media (prefers-reduced-motion: reduce) {
+  .steps-pin {
+    min-height: auto !important;
+  }
+
+  .steps-track {
+    overflow-x: auto !important;
+    padding-bottom: 1rem;
   }
 }
 

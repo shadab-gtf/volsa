@@ -36,7 +36,6 @@ export function createFlowFilm(root: HTMLElement, phone: HTMLElement): FlowFilm 
   const cards = q<HTMLElement>(".flow-card");
   const bodies = cards.map((card) => card.querySelector<HTMLElement>(".flow-card-body"));
   const bars = cards.map((card) => card.querySelector<HTMLElement>(".flow-card-bar"));
-  const dots = q<HTMLElement>(".flow-dot");
   const secured = q<HTMLElement>(".flow-secured");
 
   // Resting state. Set here rather than in the stylesheet so a reader with no
@@ -68,8 +67,8 @@ export function createFlowFilm(root: HTMLElement, phone: HTMLElement): FlowFilm 
         {
           y: 0,
           scale: 1,
-          borderColor: "rgba(34,72,11,0.10)",
-          backgroundColor: "rgba(255,255,255,0.42)",
+          borderColor: "rgba(var(--white-rgb),0.1)",
+          backgroundColor: "rgba(var(--black-rgb),0.92)",
           duration: 0.5,
         },
         "<"
@@ -86,8 +85,8 @@ export function createFlowFilm(root: HTMLElement, phone: HTMLElement): FlowFilm 
         {
           y: -8,
           scale: 1.015,
-          borderColor: "rgba(34,72,11,0.28)",
-          backgroundColor: "rgba(255,255,255,0.86)",
+          borderColor: "rgba(var(--brand-leaf-rgb),0.4)",
+          backgroundColor: "rgba(var(--black-rgb),1)",
           duration: 0.6,
         },
         "<"
@@ -101,17 +100,6 @@ export function createFlowFilm(root: HTMLElement, phone: HTMLElement): FlowFilm 
     timeline.to(
       secured,
       { autoAlpha: isVault ? 1 : 0, y: isVault ? 0 : 18, duration: 0.5 },
-      "<"
-    );
-
-    timeline.to(
-      dots,
-      {
-        scaleX: (i: number) => (i === index ? 1 : 0.4),
-        backgroundColor: (i: number) =>
-          i === index ? "#22480B" : "rgba(34,72,11,0.16)",
-        duration: 0.45,
-      },
       "<"
     );
 

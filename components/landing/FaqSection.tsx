@@ -8,6 +8,7 @@ import { getFaq, type FaqItem } from "@/services/landing.service";
 import { SectionWrapper } from "@/components/ui/SectionWrapper";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
+import { useRevealOnScroll } from "@/hooks/useRevealOnScroll";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -18,10 +19,15 @@ const faqItems = getFaq();
  */
 export function FaqSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const toggle = useCallback((index: number) => {
     setOpenIndex((prev) => (prev === index ? null : index));
   }, []);
+
+  // Batched: one ScrollTrigger for every FAQ row instead of one per row —
+  // six near-identical items don't need six independent scroll calculations.
+  useRevealOnScroll(listRef, { selector: ".faq-reveal", stagger: 0.06 });
 
   return (
     <SectionWrapper id={SECTION_IDS.faq}>
@@ -32,15 +38,15 @@ export function FaqSection() {
         />
       </ScrollReveal>
 
-      <div className="mt-16 max-w-3xl mx-auto flex flex-col gap-3">
+      <div ref={listRef} className="mt-16 max-w-3xl mx-auto flex flex-col gap-3">
         {faqItems.map((item, idx) => (
-          <ScrollReveal key={item.question} direction="up" delay={idx * 0.06}>
+          <div key={item.question} className="faq-reveal">
             <FaqAccordionItem
               item={item}
               isOpen={openIndex === idx}
               onToggle={() => toggle(idx)}
             />
-          </ScrollReveal>
+          </div>
         ))}
       </div>
     </SectionWrapper>
@@ -111,14 +117,14 @@ function FaqAccordionItem({ item, isOpen, onToggle }: FaqAccordionItemProps) {
 
   return (
     <div
-      className={`rounded-none border transition-colors duration-300 ${isOpen ? "border-brand-leaf/40 bg-white shadow-md" : "border-brand-leaf/20 bg-white/80 shadow-sm"}`}
+      className={`rounded-none border transition-colors duration-300 ${isOpen ? "border-brand-leaf/40 bg-card shadow-md" : "border-brand-leaf/20 bg-card/80 shadow-sm"}`}
     >
       <button
         onClick={onToggle}
         className="w-full flex items-center justify-between p-6 text-left cursor-pointer"
         aria-expanded={isOpen}
       >
-        <span className="text-base font-medium text-brand-forest pr-4">
+        <span className="text-base font-medium text-foreground pr-4">
           {item.question}
         </span>
         <svg
@@ -126,7 +132,7 @@ function FaqAccordionItem({ item, isOpen, onToggle }: FaqAccordionItemProps) {
           height="20"
           viewBox="0 0 20 20"
           fill="none"
-          className={`flex-shrink-0 text-brand-forest transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`}
+          className={`flex-shrink-0 text-foreground transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`}
         >
           <path
             d="M5 8l5 5 5-5"
@@ -142,7 +148,7 @@ function FaqAccordionItem({ item, isOpen, onToggle }: FaqAccordionItemProps) {
         className="overflow-hidden"
         style={{ height: 0, display: "none" }}
       >
-        <p className="px-6 pb-6 text-sm leading-relaxed text-brand-dark/80 font-light">
+        <p className="px-6 pb-6 text-sm leading-relaxed text-foreground/80 font-light">
           {item.answer}
         </p>
       </div>

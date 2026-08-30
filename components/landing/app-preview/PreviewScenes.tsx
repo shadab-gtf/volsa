@@ -95,7 +95,7 @@ export function PortfolioScene() {
         <p className={`film-balance text-[2.2rem] font-medium leading-none text-white ${MONEY}`}>
           $0.00
         </p>
-        <p className={`mt-2.5 text-xs text-brand-lime ${MONEY}`}>
+        <p className={`mt-2.5 text-xs text-brand-leaf ${MONEY}`}>
           {preview.dayChangeValue} ({preview.dayChangePercent}) today
         </p>
       </div>
@@ -108,7 +108,7 @@ export function PortfolioScene() {
               key={action}
               className="film-in flex flex-col items-center gap-2 rounded-2xl border border-white/[0.07] bg-white/[0.045] py-3.5"
             >
-              <ActionIcon size={17} className="text-brand-lime" />
+              <ActionIcon size={17} className="text-brand-leaf" />
               <span className="text-[10px] font-sans text-white/60">{action}</span>
             </div>
           );
@@ -124,7 +124,7 @@ export function PortfolioScene() {
             <span className={`text-lg font-medium text-white ${MONEY}`}>
               {preview.agentEarnings}
             </span>
-            <span className="text-[10px] font-sans font-bold text-brand-lime">
+            <span className="text-[10px] font-sans font-bold text-brand-leaf">
               {preview.agentApy}
             </span>
           </span>
@@ -142,7 +142,7 @@ export function PortfolioScene() {
       <ul className="mt-1">
         {preview.positions.map((position) => (
           <li key={position.symbol} className="film-in flex items-center gap-3 py-2.5">
-            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-brand-leaf/25 bg-brand-leaf/10 text-[10px] font-sans font-bold text-brand-lime">
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-brand-leaf/25 bg-brand-leaf/10 text-[10px] font-sans font-bold text-brand-leaf">
               {position.symbol}
             </span>
             <span className="min-w-0 flex-1">
@@ -155,7 +155,7 @@ export function PortfolioScene() {
             </span>
             <span className="text-right">
               <span className={`block text-sm text-white ${MONEY}`}>{position.value}</span>
-              <span className={`block text-[11px] text-brand-lime ${MONEY}`}>
+              <span className={`block text-[11px] text-brand-leaf ${MONEY}`}>
                 {position.change}
               </span>
             </span>
@@ -179,8 +179,8 @@ export function CouncilScene() {
         title={`Council · ${council.pair}`}
         trailing={
           <span className="flex items-center gap-1.5 rounded-full border border-brand-leaf/30 bg-brand-leaf/10 px-2.5 py-1">
-            <span className="film-live h-1.5 w-1.5 rounded-full bg-brand-lime" />
-            <span className="text-[9px] font-sans font-bold uppercase    text-brand-lime">
+            <span className="film-live h-1.5 w-1.5 rounded-full bg-brand-leaf" />
+            <span className="text-[9px] font-sans font-bold uppercase    text-brand-leaf">
               Live
             </span>
           </span>
@@ -194,7 +194,7 @@ export function CouncilScene() {
             cy="56"
             r={RING_RADIUS}
             fill="none"
-            stroke="rgba(198,241,154,0.13)"
+            stroke="rgba(var(--brand-glow-rgb),0.13)"
             strokeWidth="7"
           />
           <circle
@@ -203,7 +203,7 @@ export function CouncilScene() {
             cy="56"
             r={RING_RADIUS}
             fill="none"
-            stroke="#8FE331"
+            stroke="var(--brand-glow-bright)"
             strokeWidth="7"
             strokeLinecap="round"
             strokeDasharray={RING_LENGTH}
@@ -228,7 +228,7 @@ export function CouncilScene() {
             <span
               className={`flex-shrink-0 rounded-md px-2 py-[3px] text-[9px] font-sans font-bold uppercase   ${
                 agent.vote === "BUY"
-                  ? "bg-brand-leaf/20 text-brand-lime"
+                  ? "bg-brand-leaf/20 text-brand-leaf"
                   : "bg-white/[0.06] text-white/40"
               }`}
             >
@@ -245,8 +245,8 @@ export function CouncilScene() {
       </div>
 
       <div className="film-verdict mt-3 flex items-center justify-center gap-2 rounded-xl border border-brand-leaf/40 bg-brand-leaf/15 py-2.5">
-        <TickCircle size={16} variant="Bold" className="text-brand-lime" />
-        <span className="text-[11px] font-sans font-bold uppercase    text-brand-lime">
+        <TickCircle size={16} variant="Bold" className="text-brand-leaf" />
+        <span className="text-[11px] font-sans font-bold uppercase    text-brand-leaf">
           Entry approved
         </span>
       </div>
@@ -277,7 +277,7 @@ export function ExecutionScene() {
         title={
           <span className="flex items-baseline gap-2">
             SOL / USDC
-            <span className={`text-[11px] text-brand-lime ${MONEY}`}>+2.14%</span>
+            <span className={`text-[11px] text-brand-leaf ${MONEY}`}>+2.14%</span>
           </span>
         }
         trailing={
@@ -305,7 +305,7 @@ export function ExecutionScene() {
               x2={CHART.width}
               y1={y}
               y2={y}
-              stroke="rgba(255,255,255,0.05)"
+              stroke="rgba(var(--white-rgb),0.05)"
               strokeWidth="1"
             />
           );
@@ -316,7 +316,7 @@ export function ExecutionScene() {
           const up = close >= open;
           const top = priceToY(Math.max(open, close));
           const bottom = priceToY(Math.min(open, close));
-          const colour = up ? "#8FE331" : "#3f7a1a";
+          const colour = up ? "var(--brand-glow-bright)" : "var(--chart-down-mock)";
           return (
             <g key={index} className="film-candle">
               <line
@@ -356,19 +356,19 @@ export function ExecutionScene() {
             x2={CHART.width}
             y1={entryY}
             y2={entryY}
-            stroke="#C6F19A"
+            stroke="var(--brand-glow)"
             strokeWidth="1"
             strokeDasharray="4 5"
             opacity="0.7"
           />
-          <rect x={CHART.width - 54} y={entryY - 8} width="54" height="16" rx="4" fill="#C6F19A" />
+          <rect x={CHART.width - 54} y={entryY - 8} width="54" height="16" rx="4" fill="var(--brand-glow)" />
           <text
             x={CHART.width - 27}
             y={entryY + 4}
             textAnchor="middle"
             fontSize="9"
             fontWeight="700"
-            fill="#122805"
+            fill="var(--brand-dark)"
           >
             {CHART.entry}
           </text>
@@ -395,15 +395,15 @@ export function ExecutionScene() {
           <p className="text-[11px]  uppercase    text-white/45">
             Router
           </p>
-          <span className="film-fill-label text-[11px] font-sans font-bold text-brand-lime">
+          <span className="film-fill-label text-[11px] font-sans font-bold text-brand-leaf">
             Routing…
           </span>
         </div>
         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-          <div className="film-fill-bar h-full w-full origin-left rounded-full bg-gradient-to-r from-brand-leaf to-[#C6F19A]" />
+          <div className="film-fill-bar h-full w-full origin-left rounded-full bg-gradient-to-r from-brand-leaf to-brand-glow" />
         </div>
         <div className="film-fill-result mt-3 flex items-center gap-2">
-          <TickCircle size={15} variant="Bold" className="text-brand-lime" />
+          <TickCircle size={15} variant="Bold" className="text-brand-leaf" />
           <span className={`text-[11px] text-white/75 ${MONEY}`}>
             Filled · 126.4 SOL @ ${CHART.entry}
           </span>
@@ -422,7 +422,7 @@ export function ExitScene() {
         back
         title="Position · SOL"
         trailing={
-          <span className="rounded-md border border-brand-leaf/30 bg-brand-leaf/10 px-2 py-1 text-[9px] font-sans font-bold uppercase tracking-[0.14em] text-brand-lime">
+          <span className="rounded-md border border-brand-leaf/30 bg-brand-leaf/10 px-2 py-1 text-[9px] font-sans font-bold uppercase tracking-[0.14em] text-brand-leaf">
             Auto-exit on
           </span>
         }
@@ -435,7 +435,7 @@ export function ExitScene() {
           </span>
           <span className={`text-[11px] text-white/45 ${MONEY}`}>126.4 SOL</span>
         </div>
-        <p className={`mt-2 text-[1.9rem] font-medium leading-none text-brand-lime ${MONEY}`}>
+        <p className={`mt-2 text-[1.9rem] font-medium leading-none text-brand-leaf ${MONEY}`}>
           +$402.18
         </p>
         <div className={`mt-3 flex items-center gap-4 text-[11px] text-white/45 ${MONEY}`}>
@@ -453,7 +453,7 @@ export function ExitScene() {
           Exit rules
         </span>
         <div className="relative mt-6 h-1 rounded-full bg-white/[0.08]">
-          <div className="film-rail-fill absolute inset-y-0 left-0 w-full origin-left rounded-full bg-gradient-to-r from-brand-forest via-brand-leaf to-[#C6F19A]" />
+          <div className="film-rail-fill absolute inset-y-0 left-0 w-full origin-left rounded-full bg-gradient-to-r from-brand-forest via-brand-leaf to-brand-glow" />
           {EXIT_RAILS.map((rail) => (
             <span
               key={rail.id}
@@ -463,7 +463,7 @@ export function ExitScene() {
               {/* GSAP owns the inner node's transform; the half-pixel shift that
                   centres the marker stays on the wrapper, out of its way. */}
               <span className="film-rail flex flex-col items-center">
-                <span className="h-[7px] w-[7px] rounded-full bg-white ring-2 ring-[#0e2004]" />
+                <span className="h-[7px] w-[7px] rounded-full bg-white ring-2 ring-black" />
                 <span className="mt-2 whitespace-nowrap text-[8px] font-sans uppercase   text-white/35">
                   {rail.label}
                 </span>
@@ -475,7 +475,7 @@ export function ExitScene() {
       </div>
 
       <div className="film-toast mt-16 flex items-center gap-3 rounded-2xl border border-brand-leaf/35 bg-brand-leaf/15 px-4 py-3">
-        <TickCircle size={18} variant="Bold" className="flex-shrink-0 text-brand-lime" />
+        <TickCircle size={18} variant="Bold" className="flex-shrink-0 text-brand-leaf" />
         <span className="min-w-0">
           <span className="block text-[11px]  font-medium text-white">
             Take-profit hit

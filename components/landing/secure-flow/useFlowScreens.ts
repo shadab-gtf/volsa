@@ -40,9 +40,9 @@ const BEATS: Record<string, Beat> = {
       const key = byLabel(label);
       const at = 0.35 + index * 0.32;
       if (key) {
-        tl.to(key, { backgroundColor: "rgba(198,241,154,0.22)", duration: 0.1 }, at);
+        tl.to(key, { backgroundColor: "rgba(var(--brand-glow-rgb),0.22)", duration: 0.1 }, at);
         tl.to(key, { scale: 0.92, duration: 0.1 }, at);
-        tl.to(key, { backgroundColor: "rgba(255,255,255,0.05)", scale: 1, duration: 0.22 }, at + 0.1);
+        tl.to(key, { backgroundColor: "rgba(var(--white-rgb),0.05)", scale: 1, duration: 0.22 }, at + 0.1);
       }
       tl.call(
         () => {

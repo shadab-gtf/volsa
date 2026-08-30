@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { THEME_COLORS } from "@/constants/theme-colors";
 
 interface FeatureCardGraphicProps {
   preset: "swarm" | "shield" | "router" | "matrix" | "oracle" | "vault";
@@ -10,11 +11,23 @@ interface FeatureCardGraphicProps {
 }
 
 /**
+ * `--primary`/`--brand-dark` flip per theme (leaf-on-black in dark, forest-on-mist in
+ * light), but this dot's color is scroll-driven arithmetic, not a CSS value — it has to
+ * be resolved to a real hex the moment the theme is read, not frozen at import time.
+ */
+function currentThemeHex(varName: "--primary" | "--brand-dark", fallback: string): string {
+  if (typeof document === "undefined") return fallback;
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  if (varName === "--primary") return isDark ? THEME_COLORS.brandLeaf : THEME_COLORS.brandForest;
+  return isDark ? THEME_COLORS.black : THEME_COLORS.brandDark;
+}
+
+/**
  * Pure helper function to interpolate between two Hex colors based on scroll progress factor.
  */
 function interpolateColor(color1: string, color2: string, factor: number) {
-  const c1 = color1.startsWith("#") ? color1 : "#8fe331";
-  const c2 = color2.startsWith("#") ? color2 : "#000000";
+  const c1 = color1.startsWith("#") ? color1 : THEME_COLORS.brandLeaf;
+  const c2 = color2.startsWith("#") ? color2 : THEME_COLORS.black;
 
   const r1 = parseInt(c1.substring(1, 3), 16);
   const g1 = parseInt(c1.substring(3, 5), 16);
@@ -41,7 +54,7 @@ function interpolateColor(color1: string, color2: string, factor: number) {
  */
 export function FeatureCardGraphic({
   preset,
-  accentColor = "#66b616",
+  accentColor = "var(--primary)",
   isFront = false,
   zoomProgress = 0,
 }: FeatureCardGraphicProps) {
@@ -67,7 +80,7 @@ export function FeatureCardGraphic({
       >
         <defs>
           <linearGradient id={`${id}-grad`} x1="0" y1="0" x2="0.8" y2="1">
-            <stop offset="0%" stopColor="#c6f19a" />
+            <stop offset="0%" stopColor="var(--brand-glow)" />
             <stop offset="100%" stopColor={accentColor} />
           </linearGradient>
         </defs>
@@ -77,7 +90,7 @@ export function FeatureCardGraphic({
           <g fill="none" strokeWidth="1.5">
             {/* Inner & Outer Consensus Rings */}
             <circle cx="100" cy="90" r="54" stroke={accentColor} strokeOpacity="0.2" />
-            <circle cx="100" cy="90" r="48" stroke="#ffffff" strokeOpacity="0.15" strokeDasharray="4 6" />
+            <circle cx="100" cy="90" r="48" stroke="var(--white)" strokeOpacity="0.15" strokeDasharray="4 6" />
             
             {/* Heptagonal Consensus connections (7 agents) */}
             <polygon
@@ -98,19 +111,19 @@ export function FeatureCardGraphic({
               { x: 62.47, y: 60.03 }
             ].map((node, i) => (
               <g key={i}>
-                <line x1="100" y1="90" x2={node.x} y2={node.y} stroke="#ffffff" strokeOpacity="0.25" strokeWidth="1" />
+                <line x1="100" y1="90" x2={node.x} y2={node.y} stroke="var(--white)" strokeOpacity="0.25" strokeWidth="1" />
                 {/* Agent Nodes */}
-                <circle cx={node.x} cy={node.y} r="6.5" fill="#0d1d07" stroke={accentColor} strokeWidth="1.8" />
-                <circle cx={node.x} cy={node.y} r="2.5" fill="#ffffff" />
+                <circle cx={node.x} cy={node.y} r="6.5" fill="var(--surface-panel-carousel)" stroke={accentColor} strokeWidth="1.8" />
+                <circle cx={node.x} cy={node.y} r="2.5" fill="var(--white)" />
               </g>
             ))}
             
             {/* Central Decision Core */}
-            <circle cx="100" cy="90" r="14" fill={`url(#${id}-grad)`} stroke="#ffffff" strokeWidth="1.5" />
+            <circle cx="100" cy="90" r="14" fill={`url(#${id}-grad)`} stroke="var(--white)" strokeWidth="1.5" />
             <circle
               cx="100"
               cy="90"
-              fill={isFront ? "var(--secondary)" : "#ffffff"}
+              fill={isFront ? "var(--secondary)" : "var(--white)"}
               className="transition-all duration-500 ease-out"
               style={{ r: isFront ? 8.5 : 5 }}
             />
@@ -131,24 +144,24 @@ export function FeatureCardGraphic({
             {/* Inner Shield */}
             <path
               d="M100 37 L138 54 L138 90 C138 116 100 136 100 136 C100 136 62 116 62 90 L62 54 Z"
-              stroke="#ffffff"
+              stroke="var(--white)"
               strokeOpacity="0.45"
               strokeDasharray="5 3"
             />
 
             {/* Geometric Keylock / ZK Center Seal */}
             <g transform="translate(100, 85)" fill="none" strokeWidth="1.8">
-              <rect x="-10" y="-2" width="20" height="20" rx="3" fill="#0d1d07" stroke={accentColor} />
+              <rect x="-10" y="-2" width="20" height="20" rx="3" fill="var(--surface-panel-carousel)" stroke={accentColor} />
               <path d="M-6,-2 C-6,-8 6,-8 6,-2" stroke={accentColor} />
               <circle
                 cx="0"
                 cy="7"
-                fill={isFront ? "var(--secondary)" : "#ffffff"}
+                fill={isFront ? "var(--secondary)" : "var(--white)"}
                 className="transition-all duration-500 ease-out"
                 stroke="none"
                 style={{ r: isFront ? 5 : 2.5 }}
               />
-              <line x1="0" y1="9.5" x2="0" y2="13" stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round" />
+              <line x1="0" y1="9.5" x2="0" y2="13" stroke="var(--white)" strokeWidth="1.5" strokeLinecap="round" />
             </g>
           </g>
         )}
@@ -159,7 +172,7 @@ export function FeatureCardGraphic({
             {/* Intersecting path tunnels */}
             <polygon
               points="100,42 146,120 54,120"
-              stroke="#ffffff"
+              stroke="var(--white)"
               strokeOpacity="0.2"
               strokeDasharray="4 6"
             />
@@ -179,17 +192,17 @@ export function FeatureCardGraphic({
               { x: 54, y: 120, label: "WASM" }
             ].map((node, i) => (
               <g key={i}>
-                <circle cx={node.x} cy={node.y} r="9" fill="#0d1d07" stroke="#ffffff" strokeWidth="1.8" />
+                <circle cx={node.x} cy={node.y} r="9" fill="var(--surface-panel-carousel)" stroke="var(--white)" strokeWidth="1.8" />
                 <circle cx={node.x} cy={node.y} r="3.5" fill={accentColor} />
               </g>
             ))}
 
             {/* Central Liquidity Core */}
-            <circle cx="100" cy="94" r="14" fill={`url(#${id}-grad)`} stroke="#ffffff" strokeWidth="1.8" />
+            <circle cx="100" cy="94" r="14" fill={`url(#${id}-grad)`} stroke="var(--white)" strokeWidth="1.8" />
             <circle
               cx="100"
               cy="94"
-              fill={isFront ? "var(--secondary)" : "#ffffff"}
+              fill={isFront ? "var(--secondary)" : "var(--white)"}
               className="transition-all duration-500 ease-out"
               style={{ r: isFront ? 8 : 4.5 }}
             />
@@ -203,13 +216,13 @@ export function FeatureCardGraphic({
             {[0, 1, 2, 3].map((row) => {
               const y = 52 + row * 25;
               return (
-                <line key={`r-${row}`} x1="45" y1={y} x2="155" y2={y} stroke="#ffffff" strokeOpacity="0.15" />
+                <line key={`r-${row}`} x1="45" y1={y} x2="155" y2={y} stroke="var(--white)" strokeOpacity="0.15" />
               );
             })}
             {[0, 1, 2, 3].map((col) => {
               const x = 50 + col * 25;
               return (
-                <line key={`c-${col}`} x1={x} y1="47" x2={x} y2="133" stroke="#ffffff" strokeOpacity="0.15" />
+                <line key={`c-${col}`} x1={x} y1="47" x2={x} y2="133" stroke="var(--white)" strokeOpacity="0.15" />
               );
             })}
 
@@ -240,7 +253,7 @@ export function FeatureCardGraphic({
                 className="transition-all duration-500 ease-out"
                 style={{
                   r: node.active ? (isFront ? 7.5 : 5.5) : 2.5,
-                  fill: node.active ? (isFront ? "var(--secondary)" : "#0d1d07") : "#ffffff"
+                  fill: node.active ? (isFront ? "var(--secondary)" : "var(--surface-panel-carousel)") : "var(--white)"
                 }}
                 fillOpacity={node.active ? 1 : 0.25}
                 stroke={node.active ? accentColor : "none"}
@@ -256,7 +269,7 @@ export function FeatureCardGraphic({
             {/* Volatility waves */}
             <path
               d="M32 100 Q 60 40, 90 90 T 148 70 T 168 110"
-              stroke="#ffffff"
+              stroke="var(--white)"
               strokeOpacity="0.25"
               strokeWidth="1.5"
             />
@@ -269,14 +282,14 @@ export function FeatureCardGraphic({
 
             {/* Oracle Sensor Reticle */}
             <g transform="translate(100, 85)">
-              <circle cx="0" cy="0" r="28" stroke="#ffffff" strokeOpacity="0.25" strokeDasharray="4 6" />
-              <circle cx="0" cy="0" r="16" fill="#0d1d07" stroke={accentColor} strokeWidth="1.8" />
+              <circle cx="0" cy="0" r="28" stroke="var(--white)" strokeOpacity="0.25" strokeDasharray="4 6" />
+              <circle cx="0" cy="0" r="16" fill="var(--surface-panel-carousel)" stroke={accentColor} strokeWidth="1.8" />
               <line x1="-34" y1="0" x2="34" y2="0" stroke={accentColor} strokeOpacity="0.4" strokeWidth="1" />
               <line x1="0" y1="-34" x2="0" y2="34" stroke={accentColor} strokeOpacity="0.4" strokeWidth="1" />
               <circle
                 cx="0"
                 cy="0"
-                fill={isFront ? "var(--secondary)" : "#ffffff"}
+                fill={isFront ? "var(--secondary)" : "var(--white)"}
                 className="transition-all duration-500 ease-out"
                 stroke="none"
                 style={{ r: isFront ? 8 : 4 }}
@@ -290,8 +303,8 @@ export function FeatureCardGraphic({
           <g fill="none" strokeWidth="1.5">
             {/* Outer heavy dial ring */}
             <circle cx="100" cy="90" r="58" stroke={accentColor} strokeWidth="2.2" />
-            <circle cx="100" cy="90" r="50" stroke="#ffffff" strokeOpacity="0.2" strokeDasharray="3 6" />
-            <circle cx="100" cy="90" r="34" stroke="#ffffff" strokeOpacity="0.3" />
+            <circle cx="100" cy="90" r="50" stroke="var(--white)" strokeOpacity="0.2" strokeDasharray="3 6" />
+            <circle cx="100" cy="90" r="34" stroke="var(--white)" strokeOpacity="0.3" />
 
             {/* Dial Calibration Marks */}
             {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
@@ -308,14 +321,14 @@ export function FeatureCardGraphic({
             {/* Central cryptographic Vault Key (Scaled Down) */}
             <g fill="none" strokeWidth="1.8">
               {/* Key Head Outline */}
-              <circle cx="100" cy="78" r="7" stroke="#ffffff" />
+              <circle cx="100" cy="78" r="7" stroke="var(--white)" />
               
               {/* Key Stem */}
-              <line x1="100" y1="85" x2="100" y2="108" stroke="#ffffff" strokeLinecap="round" />
+              <line x1="100" y1="85" x2="100" y2="108" stroke="var(--white)" strokeLinecap="round" />
               
               {/* Key Teeth */}
-              <line x1="100" y1="96" x2="105" y2="96" stroke="#ffffff" strokeLinecap="round" />
-              <line x1="100" y1="102" x2="105" y2="102" stroke="#ffffff" strokeLinecap="round" />
+              <line x1="100" y1="96" x2="105" y2="96" stroke="var(--white)" strokeLinecap="round" />
+              <line x1="100" y1="102" x2="105" y2="102" stroke="var(--white)" strokeLinecap="round" />
               <line x1="100" y1="102" x2="103.5" y2="102" stroke={accentColor} strokeWidth="1.2" strokeLinecap="round" />
 
               {/* Inner Key Head Dot (Painted last to cover the key on zoom) */}
@@ -324,7 +337,11 @@ export function FeatureCardGraphic({
                 cy="78"
                 fill={
                   zoomProgress && zoomProgress > 0
-                    ? interpolateColor("#8fe331", "#000000", Math.min(1, zoomProgress / 0.5))
+                    ? interpolateColor(
+                        currentThemeHex("--primary", THEME_COLORS.brandLeaf),
+                        currentThemeHex("--brand-dark", THEME_COLORS.brandDark),
+                        Math.min(1, zoomProgress / 0.5)
+                      )
                     : (isFront ? "var(--secondary)" : accentColor)
                 }
                 stroke="none"

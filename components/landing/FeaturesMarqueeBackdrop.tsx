@@ -36,7 +36,16 @@ export function FeaturesMarqueeBackdrop({
       ease: "none",
     });
 
+    // Paused off-screen: FeaturesSection never unmounts, it's just scrolled
+    // past, so without this the marquee ticks forever behind the fold.
+    const observer = new IntersectionObserver(
+      ([entry]) => (entry.isIntersecting ? tween.play() : tween.pause()),
+      { threshold: 0 }
+    );
+    observer.observe(el);
+
     return () => {
+      observer.disconnect();
       tween.kill();
     };
   }, []);
