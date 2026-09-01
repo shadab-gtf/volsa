@@ -41,7 +41,7 @@ const FOV = 50;
 
 /**
  * Timeline for the particle stage, expressed in `particleProgress` (0 -> 1) — the
- * tail slice of the pinned section's scroll. Single source of truth: FeaturesSection
+ * tail slice of the pinned section's scroll. Single source of truth: HeroSection
  * imports this so nothing can drift out of sync with the WebGL beats.
  *
  * Beat sheet:

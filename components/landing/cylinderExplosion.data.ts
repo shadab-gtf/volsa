@@ -1,6 +1,6 @@
 /**
  * Ordered text beats for the Features particle stage, kept out of
- * CylinderExplosionSphere.tsx so FeaturesSection.tsx (which needs the beat
+ * CylinderExplosionSphere.tsx so HeroSection.tsx (which needs the beat
  * copy for its screen-reader fallback) doesn't have to statically import
  * `three` just to read a list of strings — that import is what forced the
  * whole particle component into the main bundle instead of a lazy chunk.

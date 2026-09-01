@@ -6,7 +6,6 @@ import { TradingModesSection } from "@/components/landing/TradingModesSection";
 import { EnginesShowcaseSection } from "@/components/landing/EnginesShowcaseSection";
 import { SecureFlowSection } from "@/components/landing/secure-flow/SecureFlowSection";
 import { SecurityArchitectureSection } from "@/components/landing/SecurityArchitectureSection";
-import { FeaturesSection } from "@/components/landing/FeaturesSection";
 import { HowItWorksSection } from "@/components/landing/HowItWorksSection";
 import { FaqSection } from "@/components/landing/FaqSection";
 import { CtaSection } from "@/components/landing/CtaSection";
@@ -22,7 +21,6 @@ export default function Home() {
       <Navbar />
       <main className="relative z-10 bg-surface shadow-[0_20px_50px_rgba(var(--black-rgb),0.2)]">
         <HeroSection />
-        <FeaturesSection />
         <PlatformSection />
         <AiEngineSection />
         <TradingModesSection />

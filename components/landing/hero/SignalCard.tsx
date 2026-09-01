@@ -5,6 +5,10 @@ import gsap from "gsap";
 import { getHeroSignals, type HeroSignal } from "@/services/landing.service";
 import { usePreloaderDone } from "@/hooks/usePreloaderDone";
 import { usePointerParallax } from "@/hooks/usePointerParallax";
+import {
+  HANDOFF_CARD_RADIUS_CLASS,
+  HANDOFF_CARD_SHELL_CLASS,
+} from "@/components/landing/heroCylinderHandoff.constants";
 import { Sparkline } from "./Sparkline";
 
 const SIGNALS = getHeroSignals();
@@ -72,8 +76,8 @@ function Rail({ at, label }: { at: number; label: string }) {
       className="chart-rail pointer-events-none absolute inset-x-0 flex items-center gap-2"
       style={{ top: `${(1 - at) * 100}%` }}
     >
-      <span className="flex-1 border-t border-dashed border-foreground/20" />
-      <span className="font-sans text-[9px] uppercase tracking-[0.14em] text-foreground/35">
+      <span className="flex-1 border-t border-dashed border-white/20" />
+      <span className="font-sans text-[9px] uppercase tracking-[0.14em] text-white/40">
         {label}
       </span>
     </div>
@@ -85,13 +89,12 @@ const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 /**
  * Hero signal panel — a sample of what the Super Machine puts on screen.
  *
- * Every field maps to the signal payload in the spec: asset, price, action, strength,
- * entry, target, stop-loss, and the agent readings behind the decision. Nothing here is
- * invented beyond that.
+ * Every field maps to the signal payload in the spec: asset, price, action, and trend.
+ * Nothing here is invented beyond that.
  *
- * Cycles on a timer that pauses on hover, and the pair tabs drive it directly. React
- * state holds only the active index, which changes every few seconds; everything
- * per-frame is a GSAP transform or a CSS variable, never a re-render.
+ * Cycles on a timer that pauses on hover. React state holds only the active index, which
+ * changes every few seconds; everything per-frame is a GSAP transform or a CSS variable,
+ * never a re-render.
  */
 export function SignalCard() {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -192,16 +195,16 @@ export function SignalCard() {
   // the swap, which never touches the shell. The card simply vanished. The entrance now
   // depends only on the preloader, so nothing reverts it until unmount.
 
-  // Entrance: the card assembles the way a product film would — frame, header, tabs, the
-  // reading, then the chart drawing itself, then the levels and the agent bars. Every
-  // beat overlaps the one before, so it reads as one continuous take rather than a queue.
+  // Entrance: the card assembles the way a product film would — frame, header, the
+  // reading, then the chart drawing itself. Every beat overlaps the one before, so it
+  // reads as one continuous take rather than a queue.
   useEffect(() => {
     if (!isPreloaderDone) return;
 
     const ctx = gsap.context(() => {
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         gsap.set(
-          ".card-shell, .card-head, .card-tab, .card-pair, .card-price, .card-badge, .card-change, .card-level, .card-conf, .agent-row, .card-note, .chart-rail",
+          ".card-shell, .card-head, .card-pair, .card-price, .card-badge, .card-change, .chart-rail",
           { opacity: 1, clearProps: "transform,clipPath" }
         );
         return;
@@ -211,19 +214,13 @@ export function SignalCard() {
         .timeline({ defaults: { ease: "power3.out" } })
         .fromTo(".card-shell", { opacity: 0, y: 44, scale: 0.985 }, { opacity: 1, y: 0, scale: 1, duration: 1 })
         .fromTo(".card-head", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.5 }, 0.34)
-        .fromTo(".card-tab", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.07 }, 0.46)
-        .fromTo(".card-pair", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.45 }, 0.68)
-        .fromTo(".card-price", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.65 }, 0.76)
-        .fromTo(".card-badge", { opacity: 0, scale: 0.82 }, { opacity: 1, scale: 1, duration: 0.5, ease: "back.out(2)" }, 0.9)
-        .fromTo(".card-change", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.4 }, 0.98)
+        .fromTo(".card-pair", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.45 }, 0.6)
+        .fromTo(".card-price", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.65 }, 0.72)
+        .fromTo(".card-badge", { opacity: 0, scale: 0.82 }, { opacity: 1, scale: 1, duration: 0.5, ease: "back.out(2)" }, 0.86)
+        .fromTo(".card-change", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.4 }, 0.94)
         .fromTo(".chart-rail", { opacity: 0, x: -10 }, { opacity: 1, x: 0, duration: 0.6, stagger: 0.1 }, 1.05)
         .fromTo(".chart-plot", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 1.35, ease: "power2.inOut" }, 1.1)
-        .fromTo(".card-level", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.09 }, 1.9)
-        .fromTo(".chart-head", { scale: 0 }, { scale: 1, duration: 0.55, ease: "back.out(2.2)" }, 2.4)
-        .fromTo(".card-conf", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.08 }, 2.22)
-        .fromTo(".agent-row", { opacity: 0, x: -12 }, { opacity: 1, x: 0, duration: 0.45, stagger: 0.09 }, 2.34)
-        .fromTo(".agent-bar", { scaleX: 0 }, { scaleX: 1, duration: 0.85, stagger: 0.09, ease: "power2.out" }, 2.42)
-        .fromTo(".card-note", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 2.85);
+        .fromTo(".chart-head", { scale: 0 }, { scale: 1, duration: 0.55, ease: "back.out(2.2)" }, 2.1);
     }, cardRef);
 
     return () => ctx.revert();
@@ -248,14 +245,13 @@ export function SignalCard() {
       gsap
         .timeline({ defaults: { ease: "power3.out" } })
         .fromTo(
-          ".card-pair, .card-price, .card-badge, .card-change, .card-level, .card-conf",
+          ".card-pair, .card-price, .card-badge, .card-change",
           { opacity: 0, y: 10 },
           { opacity: 1, y: 0, duration: 0.5, stagger: 0.035 }
         )
         .fromTo(".chart-plot", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 1.05, ease: "power2.inOut" }, 0)
         .fromTo(".chart-rail", { opacity: 0, x: -8 }, { opacity: 1, x: 0, duration: 0.55, stagger: 0.08 }, 0.3)
-        .fromTo(".chart-head", { scale: 0 }, { scale: 1, duration: 0.45, ease: "back.out(2)" }, 0.95)
-        .fromTo(".agent-bar", { scaleX: 0 }, { scaleX: 1, duration: 0.7, stagger: 0.06, ease: "power2.out" }, 0.18);
+        .fromTo(".chart-head", { scale: 0 }, { scale: 1, duration: 0.45, ease: "back.out(2)" }, 0.95);
     }, cardRef);
 
     return () => ctx.revert();
@@ -266,51 +262,33 @@ export function SignalCard() {
       ref={cardRef}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
-      className="w-full max-w-[28rem] lg:h-full"
+      className="h-full w-full"
     >
       <div
         ref={tiltRef}
-        className="card-shell flex h-full flex-col opacity-0 rounded-[1.5rem] border border-foreground/10 bg-card/80 p-5 shadow-[0_30px_80px_-28px_rgba(var(--brand-dark-rgb),0.38)] backdrop-blur-xl will-change-transform sm:p-6"
+        className={`card-shell flex h-full flex-col opacity-0 ${HANDOFF_CARD_RADIUS_CLASS} ${HANDOFF_CARD_SHELL_CLASS} p-6 will-change-transform sm:p-8`}
       >
         {/* Header */}
         <div className="card-head flex items-center justify-between gap-3">
-          <span className="inline-flex items-center gap-2 font-sans text-[10px] font-bold uppercase tracking-[0.18em] text-foreground/60">
+          <span className="inline-flex items-center gap-2 font-sans text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-leaf opacity-70" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-brand-leaf" />
             </span>
             Sample signal
           </span>
-          <span className="font-sans text-[10px] uppercase tracking-[0.16em] text-foreground/35">
+          <span className="font-sans text-[10px] uppercase tracking-[0.16em] text-white/40">
             scan · 15s
           </span>
         </div>
 
-        {/* Pair tabs */}
-        <div className="mt-4 flex gap-1 rounded-xl bg-primary/5 p-1">
-          {SIGNALS.map((s, i) => (
-            <button
-              key={s.pair}
-              onClick={() => setIndex(i)}
-              aria-pressed={i === index}
-              className={`card-tab flex-1 rounded-lg px-2 py-1.5 font-sans text-[11px] font-semibold uppercase tracking-wider transition-colors duration-300 ${
-                i === index
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-foreground/45 hover:text-foreground"
-              }`}
-            >
-              {s.pair.split(" / ")[0]}
-            </button>
-          ))}
-        </div>
-
         {/* Price + action */}
-        <div className="mt-5 flex items-end justify-between gap-4">
+        <div className="mt-6 flex items-end justify-between gap-4">
           <div>
-            <p className="card-pair font-sans text-[10px] uppercase tracking-[0.16em] text-foreground/40">
+            <p className="card-pair font-sans text-[10px] uppercase tracking-[0.16em] text-white/45">
               {signal.pair} · {signal.chain}
             </p>
-            <p className="card-price mt-1.5 font-heading text-[2.35rem] leading-none tracking-tight tabular-nums text-foreground">
+            <p className="card-price mt-1.5 font-heading text-[2.35rem] leading-none tracking-tight tabular-nums text-white">
               {signal.price}
             </p>
           </div>
@@ -332,7 +310,7 @@ export function SignalCard() {
             so switching action re-themes the whole chart with no extra props. */}
         <div
           ref={chartRef}
-          className={`relative mt-5 min-h-[7rem] w-full flex-1 ${theme.accent}`}
+          className={`relative mt-6 min-h-[7rem] w-full flex-1 ${theme.accent}`}
           style={{ "--cx": 1, "--cy": 1 - last } as React.CSSProperties}
         >
           <Rail at={signal.targetAt} label="Target" />
@@ -359,56 +337,6 @@ export function SignalCard() {
             }}
           />
         </div>
-
-        {/* Levels */}
-        <div className="mt-5 grid grid-cols-3 gap-3 border-y border-foreground/10 py-3.5">
-          {[
-            ["Entry", signal.entry],
-            ["Target", signal.target],
-            ["Stop", signal.stop],
-          ].map(([label, value]) => (
-            <div key={label} className="card-level">
-              <p className="font-sans text-[9px] uppercase tracking-[0.14em] text-foreground/40">
-                {label}
-              </p>
-              <p className="mt-1 font-heading text-lg tabular-nums text-foreground">{value}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Agent breakdown — the decision layer's inputs, not a black box */}
-        <div className="mt-4">
-          <div className="flex items-baseline justify-between">
-            <p className="card-conf font-sans text-[10px] font-bold uppercase tracking-[0.16em] text-foreground/45">
-              8 agents · confidence
-            </p>
-            {/* The heading face ships no percent glyph, so the sign is set in sans. */}
-            <p className={`card-conf ${theme.accent}`}>
-              <span className="font-heading text-xl tabular-nums">{signal.confidence}</span>
-              <span className="font-sans text-xs font-semibold">%</span>
-            </p>
-          </div>
-
-          <div className="mt-3 space-y-2.5">
-            {signal.agents.map((agent) => (
-              <div key={agent.label} className="agent-row flex items-center gap-3">
-                <span className="w-[4.75rem] shrink-0 font-sans text-[10px] uppercase tracking-wider text-foreground/45">
-                  {agent.label}
-                </span>
-                <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-primary/10">
-                  <span
-                    className={`agent-bar block h-full origin-left rounded-full bg-gradient-to-r ${theme.bar}`}
-                    style={{ width: `${agent.value}%` }}
-                  />
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <p className="card-note mt-5 border-t border-foreground/10 pt-3 font-sans text-[9px] uppercase tracking-[0.14em] text-foreground/30">
-          Illustrative · not investment advice
-        </p>
       </div>
     </div>
   );

@@ -2,6 +2,13 @@
 
 import React, { useState, useEffect } from "react";
 import { MemoFeatureCardGraphic } from "./FeatureCardGraphic";
+import {
+  HANDOFF_CARD_RADIUS_CLASS,
+  HANDOFF_CARD_SHELL_CLASS,
+  HANDOFF_CARD_SHELL_FRONT_CLASS,
+  HANDOFF_CARD_SIZE_CLASS,
+  HANDOFF_TARGET_ID,
+} from "./heroCylinderHandoff.constants";
 import type { Feature } from "@/services/landing.service";
 
 /** One hairline mark per preset — the badge's icon, not a decorated emoji. */
@@ -137,13 +144,17 @@ export function Cylinder3DCarousel({
             return (
               <div
                 key={feature.id}
+                // Only ever one card at a time — the id HeroSection measures against for
+                // its FLIP target. Placed on the card itself, not the carousel's outer
+                // wrapper: this card carries its own translateY(-20px) (see the
+                // transform below), so measuring the wrapper instead was consistently
+                // 20px short and showed up as the two cards' edges not quite lining up
+                // during the crossfade.
+                id={isFront ? HANDOFF_TARGET_ID : undefined}
                 onClick={() => onCardClick?.(idx)}
-                className={`absolute w-[305px] sm:w-[350px] md:w-[380px] h-[440px] sm:h-[500px] md:h-[550px] rounded-[32px] sm:rounded-[36px] md:rounded-[40px] border transition-colors duration-500 group ${
+                className={`absolute ${HANDOFF_CARD_SIZE_CLASS} ${HANDOFF_CARD_RADIUS_CLASS} border transition-colors duration-500 group ${
                   isZoomingLastCard ? "" : "overflow-hidden"
-                } ${isFront
-                  ? "border-brand-leaf/60 bg-surface-panel-carousel/95 shadow-[0_30px_70px_rgba(var(--shadow-carousel-rgb),0.95)]"
-                  : "border-white/15 bg-surface-panel-carousel-alt/90 shadow-[0_20px_50px_rgba(var(--black-rgb),0.85)]"
-                }`}
+                } ${isFront ? HANDOFF_CARD_SHELL_FRONT_CLASS : HANDOFF_CARD_SHELL_CLASS}`}
                 style={{
                   transform: `rotateY(${cardAngle}deg) translateZ(${radius}px) translateY(-20px)`,
                   transformStyle: "preserve-3d",
@@ -180,21 +191,7 @@ export function Cylinder3DCarousel({
                   />
                 </div>
 
-                {/* Inner Ambient Glow matching Theme */}
-                <div
-                  className="absolute -top-12 left-1/2 -translate-x-1/2 w-64 h-64 rounded-full pointer-events-none opacity-35 blur-2xl"
-                  style={{
-                    background: `radial-gradient(circle, var(--primary) 0%, transparent 70%)`,
-                  }}
-                />
-
-                {/* Vignette Overlay matching User UI Pattern */}
-                <div className="absolute inset-0 z-20 bg-gradient-to-t from-surface-panel-deep/98 via-surface-panel-deep/20 to-surface-panel-deep/50 pointer-events-none" />
-
-                {/* Glass Edge Highlights */}
-                <div className="absolute inset-0 z-20 rounded-[32px] sm:rounded-[36px] md:rounded-[40px] ring-1 ring-inset ring-white/15 pointer-events-none" />
-
-                {/* Card Title & Description Overlay at Bottom */}
+                {/* Card Title & Description */}
                 <div className="absolute bottom-7 left-7 right-7 z-30">
                   <h4 className="text-2xl sm:text-3xl font-heading font-semibold text-white tracking-tight leading-snug">
                     {feature.title}
@@ -202,29 +199,6 @@ export function Cylinder3DCarousel({
                   <p className="text-xs sm:text-sm text-white/75 mt-2.5 leading-relaxed line-clamp-2 font-sans">
                     {feature.description}
                   </p>
-
-                  {/* Stat & Status Footer */}
-                  {feature.stat && (
-                    <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-mono font-bold text-brand-leaf block">
-                          {feature.stat.value}
-                        </span>
-                        <span className="text-[9px] uppercase tracking-wider text-white/40 font-sans block">
-                          {feature.stat.label}
-                        </span>
-                      </div>
-
-                      <div
-                        className={`px-3 py-1 rounded-full text-[11px] font-sans font-semibold transition-all duration-300 ${isFront
-                          ? "bg-brand-leaf text-brand-dark shadow-sm"
-                          : "bg-white/10 text-white/70"
-                          }`}
-                      >
-                        {isFront ? "Consensus Active" : "Inspect Protocol"}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             );
