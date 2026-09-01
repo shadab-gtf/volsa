@@ -35,13 +35,13 @@ export function setScrollLocked(locked: boolean) {
  * overlay: Lenis ignores its own anchor handling while stopped, so the click
  * would otherwise do nothing at all.
  */
-export function scrollToTarget(hash: string) {
+export function scrollToTarget(hash: string, opts?: { duration?: number }) {
   const lenis = getLenis();
   if (lenis) {
     setScrollLocked(false);
     lenis.scrollTo(hash, {
       offset: -NAV_OFFSET,
-      duration: 1.1,
+      duration: opts?.duration ?? 1.1,
       force: true,
     });
     return;

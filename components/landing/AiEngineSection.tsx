@@ -8,6 +8,7 @@ import { SECTION_IDS } from "@/constants/landing.constants";
 import { getAiEngine } from "@/services/landing.service";
 import { MaskedHeading } from "@/components/ui/MaskedHeading";
 import { AmbientField } from "@/components/ui/AmbientField";
+import { scrollToTarget } from "@/components/ui/SmoothScrollProvider";
 
 /**
  * WebGL, loaded on demand rather than shipped with the first paint. `ssr: false`
@@ -83,6 +84,7 @@ export function AiEngineSection() {
       gsap.set(".beat-0", { clipPath: "inset(0% 0% 0% 0%)", y: 0, opacity: 1 });
       gsap.set(".rail-tick", { opacity: 0.2, scaleY: 1 });
       gsap.set(".tick-0", { opacity: 1, scaleY: 1.9 });
+      gsap.set(".skip-btn", { opacity: 1 });
 
       const tl = gsap.timeline({
         defaults: { ease: "power2.out" },
@@ -140,10 +142,22 @@ export function AiEngineSection() {
           );
         }
       });
+
+      // Nothing left to skip past by the time the last beat lands — the
+      // button fades out over the same window the last wipe uses.
+      tl.to(".skip-btn", { opacity: 0, duration: WIPE }, BEATS - WIPE);
     }, root);
 
     return () => ctx.revert();
   }, []);
+
+  // A longer glide than the navbar's own anchor jumps: this section can pin
+  // for several viewport-heights of scroll, and the default 1.1s duration
+  // that feels right for a short nav hop would read as a hard snap here.
+  function handleSkip(event: React.MouseEvent<HTMLAnchorElement>) {
+    event.preventDefault();
+    scrollToTarget(`#${SECTION_IDS.tradingModes}`, { duration: 1.8 });
+  }
 
   return (
     <section id={SECTION_IDS.aiEngine} className="relative w-full bg-surface-tint-a">
@@ -165,12 +179,33 @@ export function AiEngineSection() {
             clip-path: none;
             transform: none;
           }
-          .ai-index, .ai-rail { display: none; }
+          .ai-index, .ai-rail, .skip-btn { display: none; }
         }
       `}</style>
 
       <div ref={stage} className="ai-stage relative h-svh w-full overflow-hidden">
         <AmbientField />
+
+        {/* Skips the scroll-jack entirely — jumps straight to the next section. */}
+        <a
+          href={`#${SECTION_IDS.tradingModes}`}
+          onClick={handleSkip}
+          className="skip-btn group pointer-events-auto absolute right-6 top-24 z-30 flex items-center gap-2 border-b border-foreground/25 pb-1 font-sans text-[10px] font-bold uppercase tracking-[0.24em] text-foreground/50 transition-colors duration-300 hover:border-foreground/60 hover:text-foreground/90 sm:right-10 sm:top-28 lg:right-14 xl:right-16"
+        >
+          Skip
+          <svg
+            viewBox="0 0 16 16"
+            className="h-3 w-3 transition-transform duration-300 group-hover:translate-y-0.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 6l5 5 5-5" />
+          </svg>
+        </a>
 
         {/* The index. Full-stage, because the glyph travels across it. Dimmed on narrow
             screens, where there is no second column and the copy sits over it. */}

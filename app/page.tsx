@@ -22,13 +22,13 @@ export default function Home() {
       <Navbar />
       <main className="relative z-10 bg-surface shadow-[0_20px_50px_rgba(var(--black-rgb),0.2)]">
         <HeroSection />
+        <FeaturesSection />
         <PlatformSection />
         <AiEngineSection />
         <TradingModesSection />
         <EnginesShowcaseSection />
         {/* <SecureFlowSection /> */}
         <SecurityArchitectureSection />
-        <FeaturesSection />
         <HowItWorksSection />
         <FaqSection />
         <CtaSection />

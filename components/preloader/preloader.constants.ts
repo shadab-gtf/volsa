@@ -9,14 +9,13 @@
 
 export const PRELOADER_TIMING = {
   entranceDuration: 0.6,
-  counterDuration: 2.4,
+  counterDuration: 2.2,
   holdDuration: 0.3,
-  widgetExitDuration: 0.35,
-  exitFadeDuration: 1.1,
+  exitWipeDuration: 0.9,
 };
 
 export const EASINGS = {
   entrance: "power3.out",
   counter: "power1.inOut",
-  exit: "sine.inOut",
+  exitWipe: "power2.inOut",
 };
