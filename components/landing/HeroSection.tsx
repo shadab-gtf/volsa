@@ -20,6 +20,7 @@ import { HeroBackground } from "./HeroBackground";
 import { SignalCard, SIGNALS as HERO_SIGNALS, CYCLE_MS as SIGNAL_CYCLE_MS } from "./hero/SignalCard";
 import { Cylinder3DCarousel } from "./Cylinder3DCarousel";
 import { FeaturesMarqueeBackdrop } from "./FeaturesMarqueeBackdrop";
+import { HeroZoomReveal } from "./HeroZoomReveal";
 import { TEXT_BEATS } from "./cylinderExplosion.data";
 
 /**
@@ -32,25 +33,6 @@ const CylinderExplosionSphere = dynamic(
   () => import("./CylinderExplosionSphere").then((m) => m.CylinderExplosionSphere),
   { ssr: false }
 );
-
-/**
- * Same story as above, plus this one drags in three-globe geometry helpers
- * (topojson-client/d3-geo) that nothing else on the page needs — mounted only for the
- * brief window before the dune explosion takes over, then unmounted again.
- */
-const WorldSignalGlobe = dynamic(
-  () => import("./WorldSignalGlobe").then((m) => m.WorldSignalGlobe),
-  { ssr: false }
-);
-
-/** Where the signal globe's own 0-1 window ends, in `particleProgress` terms — past
- *  this point it's unmounted entirely and CylinderExplosionSphere's sand/headline
- *  sequence owns the stage, exactly as before this globe existed. Left with a small
- *  gap before CylinderExplosionSphere's own `PARTICLE_PHASES.sphereIn` starts (see
- *  that file) rather than overlapping it: the two are different enough shapes — a
- *  dotted world map versus a solid lambert-shaded ball — that fading one in while the
- *  other is still fading out reads as a blobby double-exposure, not a clean handoff. */
-const GLOBE_WINDOW_END = 0.11;
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -474,16 +456,11 @@ export function HeroSection() {
             opacity: particleProgress > 0 ? Math.min(1, particleProgress / 0.045) : 0,
           }}
         >
-          {/* Lower bound matters as much as the upper one: `particleProgress` sits at 0
-              for the whole cylinder-rotation phase, so a bare `< GLOBE_WINDOW_END`
-              check kept a second WebGL context alive (and building its geometry) all
-              the way through it. */}
-          {particleProgress > 0.002 && particleProgress < GLOBE_WINDOW_END && (
-            <WorldSignalGlobe progress={Math.min(1, particleProgress / GLOBE_WINDOW_END)} />
-          )}
           <CylinderExplosionSphere zoomProgress={particleProgress} activeColor={THEME_COLORS.brandLeaf} />
         </div>
       )}
+
+      <HeroZoomReveal zoomProgress={zoomProgress} particleProgress={particleProgress} />
 
       {/* ─── Screen-Reader Accessible Fallback for the feature carousel ─── */}
       <div className="sr-only" aria-live="polite">

@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import * as THREE from "three";
 import { THEME_COLORS } from "@/constants/theme-colors";
 import { TEXT_BEATS } from "./cylinderExplosion.data";
+import { isLand } from "./worldLandGrid";
 
 interface CylinderExplosionSphereProps {
   /** 0 -> 1 slice of the pinned Features scroll that belongs to the particle stage. */
@@ -45,6 +46,33 @@ const SPHERE_SKIN = 0.05;
 const DUNE_BASE = -30;
 const CAM_Z = 132;
 const FOV = 50;
+const RAD = Math.PI / 180;
+
+/** Below this the stage is doing nothing visible — see the render-loop bail below. */
+const ACTIVE_THRESHOLD = 0.001;
+
+/**
+ * Markers cycled while the globe holds — content pulled straight from the product
+ * spec's alert/signal vocabulary (§7 AI Signals, §30 Alerts & Notifications), placed at
+ * plausible city locations the way a real "live activity" globe scatters its markers.
+ */
+const MARKERS = [
+  { lat: 40.7, lon: -74.0, title: "BUY signal", meta: "BTC · momentum", color: THEME_COLORS.signalUp },
+  { lat: 51.5, lon: -0.12, title: "Trade executed", meta: "BSC · confirmed", color: THEME_COLORS.brandLeaf },
+  { lat: 35.7, lon: 139.7, title: "Take-profit triggered", meta: "+12.4%", color: THEME_COLORS.signalUp },
+  { lat: 1.35, lon: 103.8, title: "Deposit confirmed", meta: "BEP-20 · ~12s", color: THEME_COLORS.brandLeaf },
+  { lat: -33.9, lon: 151.2, title: "Swap completed", meta: "USDT → BNB", color: THEME_COLORS.brandGlow },
+  { lat: 25.2, lon: 55.3, title: "Cross-chain transfer", meta: "BSC ⇄ Solana", color: THEME_COLORS.brandLeaf },
+  { lat: -23.5, lon: -46.6, title: "SELL signal", meta: "Risk contained", color: THEME_COLORS.signalDown },
+  { lat: 19.4, lon: -99.1, title: "Withdrawal confirmed", meta: "~12s settle", color: THEME_COLORS.brandLeaf },
+];
+const MARKER_CYCLE_MS = 2400;
+
+function latLonToVec3(lat: number, lon: number, r: number, out = new THREE.Vector3()) {
+  const phi = (90 - lat) * RAD;
+  const theta = (lon + 180) * RAD;
+  return out.set(-r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta));
+}
 
 /**
  * Timeline for the particle stage, expressed in `particleProgress` (0 -> 1) — the
@@ -52,13 +80,15 @@ const FOV = 50;
  * imports this so nothing can drift out of sync with the WebGL beats.
  *
  * Beat sheet:
- *   0.00 - 0.11  WorldSignalGlobe owns the stage (its own component, its own 0-1
- *                window) — bloom, idle-rotate, marker popups, fade out
- *   0.11 - 0.115 a deliberate beat of plain black — see `sphereIn` below for why this
- *                isn't a crossfade
- *   0.115 - 0.138 this sphere fades in from black, condensing into a tighter lit ball
- *                 right before the blast
- *   0.14 - 0.30  blast outward, gravity rakes it into a desert dune field
+ *   0.00 - 0.05  the globe blooms in — same particle buffer as the rest of this
+ *                component, just colored by real coastlines instead of a flat lambert
+ *                ball (see the land/ocean palette below), with drag-to-rotate and
+ *                marker popups. This is the whole point of the merge: there is no
+ *                separate globe scene to crossfade from, so nothing to hand off
+ *                awkwardly — the thing that explodes *is* the globe.
+ *   0.05 - 0.14  holds: idle-rotate, markers cycle, ready for the blast
+ *   0.14 - 0.30  blast outward, gravity rakes it into a desert dune field (markers and
+ *                the popup fade out over the first quarter of this)
  *   0.30 - 0.33  dune vista holds (camera lifts to a standing-in-the-desert view)
  *   0.33 - 0.93  four text beats — see TEXT_BEATS
  *   0.93 - 1.00  the closing headline simply holds
@@ -69,7 +99,7 @@ const FOV = 50;
  * headline instead means it physically scrolls off as the next section pushes in.
  */
 export const PARTICLE_PHASES = {
-  sphereIn: { start: 0.115, end: 0.138 },
+  globeIn: { start: 0.0, end: 0.05 },
   explodeToDunes: { start: 0.14, end: 0.3 },
 } as const;
 
@@ -219,21 +249,34 @@ function sampleText(
 /**
  * GPU-accelerated WebGL particle stage.
  *
- * A lit Fibonacci sphere blows apart into a wind-carved desert dune field, the sand
- * lifts into "IN YOUR CONTROL", then rebuilds itself headline to headline before
- * warping past the camera. Every timing lives in PARTICLE_PHASES / TEXT_BEATS; the
- * type is re-fitted to the viewport on every resize.
+ * The same particle buffer plays three roles in sequence: a dotted world-map globe
+ * (real coastlines, drag-to-rotate, cycling signal markers), which blows apart into a
+ * wind-carved desert dune field, which lifts into "IN YOUR CONTROL" and rebuilds
+ * itself headline to headline before warping past the camera. Every timing lives in
+ * PARTICLE_PHASES / TEXT_BEATS; the type is re-fitted to the viewport on every resize.
  */
 export function CylinderExplosionSphere({
   zoomProgress,
   activeColor = BRAND.leaf,
 }: CylinderExplosionSphereProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef<HTMLDivElement>(null);
   const progressRef = useRef(0);
+  const activeMarkerRef = useRef(0);
+  const [activeMarker, setActiveMarker] = useState(0);
 
   useEffect(() => {
     progressRef.current = zoomProgress;
   }, [zoomProgress]);
+
+  useEffect(() => {
+    activeMarkerRef.current = activeMarker;
+  }, [activeMarker]);
+
+  useEffect(() => {
+    const id = setInterval(() => setActiveMarker((i) => (i + 1) % MARKERS.length), MARKER_CYCLE_MS);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -353,10 +396,24 @@ export function CylinderExplosionSphere({
       dunePos[idx + 1] = DUNE_BASE + h - depth;
       dunePos[idx + 2] = dz;
 
-      // ── Sphere palette: one hue only — dark to lit brand-leaf, lambert-shaded ──
+      // ── Globe palette: land dots lit brand-leaf (lambert-shaded, same as the old
+      //    flat sphere), ocean dots pushed toward black so they read as invisible
+      //    against the backdrop. Colour-masked, not filtered out — every particle,
+      //    ocean included, still explodes into the dune field exactly as before, so the
+      //    dune field is exactly as dense as it always was. ──
+      const lat = Math.asin(ny) / RAD;
+      const lonRaw = Math.atan2(nz, -nx) / RAD - 180;
+      // JS's `%` keeps the dividend's sign, so the extra +360 is what actually wraps
+      // negative longitudes (-227° -> 133°) instead of leaving them out of range.
+      const lon = (((lonRaw + 180) % 360) + 360) % 360 - 180;
       const lambert = Math.max(0, (nx * LX + ny * LY + nz * LZ) / LLEN);
-      const shade = 0.22 + Math.pow(lambert, 0.75) * 0.78;
-      tmp.copy(cDark).lerp(cLeaf, clamp01(shade));
+
+      if (isLand(lon, lat)) {
+        const shade = 0.4 + Math.pow(lambert, 0.75) * 0.6;
+        tmp.copy(cDark).lerp(cLeaf, clamp01(shade));
+      } else {
+        tmp.copy(cDark).multiplyScalar(0.05 + lambert * 0.05);
+      }
       colSphere[idx] = tmp.r;
       colSphere[idx + 1] = tmp.g;
       colSphere[idx + 2] = tmp.b;
@@ -396,6 +453,39 @@ export function CylinderExplosionSphere({
     let beatCache: (SampledText | null)[] = [];
     let idleHandle: number | null = null;
 
+    // ─── Globe group: the particle sphere plus its marker meshes, rotated together so
+    //     drag and idle-spin apply to both without tracking two transforms. ───
+    const globeGroup = new THREE.Group();
+    scene.add(globeGroup);
+
+    const markerGeometry = new THREE.SphereGeometry(1, 10, 10);
+    const markerMaterials: THREE.MeshBasicMaterial[] = [];
+    const markerMeshes: THREE.Mesh[] = [];
+    const markerAnchors: THREE.Vector3[] = MARKERS.map(() => new THREE.Vector3());
+
+    MARKERS.forEach((m) => {
+      const material = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(m.color),
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(markerGeometry, material);
+      globeGroup.add(mesh);
+      markerMaterials.push(material);
+      markerMeshes.push(mesh);
+    });
+
+    /** Re-anchors marker meshes to the current `sphereR` — called once up front and
+     *  again whenever `fitToViewport` re-solves the radius on resize. */
+    const repositionMarkers = () => {
+      MARKERS.forEach((m, i) => {
+        latLonToVec3(m.lat, m.lon, sphereR * 1.01, markerAnchors[i]);
+        markerMeshes[i].position.copy(markerAnchors[i]);
+        markerMeshes[i].scale.setScalar(sphereR * 0.018);
+      });
+    };
+
     /** Samples one headline, memoised. Cheap after the first call. */
     const ensureBeat = (i: number): SampledText => {
       const hit = beatCache[i];
@@ -424,6 +514,8 @@ export function CylinderExplosionSphere({
         maxH: visH * 0.6,
         font: resolveHeadingFont(),
       };
+
+      repositionMarkers();
 
       beatCache = [];
       // Only the first headline is needed for a long while; let the browser fold the
@@ -467,16 +559,58 @@ export function CylinderExplosionSphere({
     });
 
     const points = new THREE.Points(geometry, material);
-    scene.add(points);
+    globeGroup.add(points);
+
+    // ─── Drag to rotate. A handful of pointer handlers rather than a controls library:
+    //     this only ever needs yaw/pitch on one group, and a library's touch handling
+    //     tends to call preventDefault(), which would trap the page scroll this pinned
+    //     section depends on. Pointer drag is left to mouse/trackpad for that reason —
+    //     touch keeps the idle auto-spin without capturing the gesture at all. ───
+    const fineCursor = window.matchMedia("(pointer: fine)").matches;
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    let dragYOffset = 0;
+    let dragXOffset = 0;
+
+    const onPointerDown = (e: PointerEvent) => {
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      renderer.domElement.setPointerCapture(e.pointerId);
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (!dragging) return;
+      dragYOffset += (e.clientX - lastX) * 0.005;
+      dragXOffset = Math.max(-0.6, Math.min(0.6, dragXOffset + (e.clientY - lastY) * 0.004));
+      lastX = e.clientX;
+      lastY = e.clientY;
+    };
+    const endDrag = (e: PointerEvent) => {
+      if (!dragging) return;
+      dragging = false;
+      if (renderer.domElement.hasPointerCapture(e.pointerId)) {
+        renderer.domElement.releasePointerCapture(e.pointerId);
+      }
+    };
+
+    if (fineCursor) {
+      renderer.domElement.style.pointerEvents = "auto";
+      renderer.domElement.style.cursor = "grab";
+      renderer.domElement.addEventListener("pointerdown", onPointerDown);
+      renderer.domElement.addEventListener("pointermove", onPointerMove);
+      renderer.domElement.addEventListener("pointerup", endDrag);
+      renderer.domElement.addEventListener("pointercancel", endDrag);
+    }
 
     // ─── Render loop ───
     const clock = new THREE.Timer();
     let frame = 0;
     let time = 0;
-    let smoothed = 0;
     let lastSand = -1;
     let lastText = -1;
     let lastBeat = -2;
+    const projected = new THREE.Vector3();
 
     const animate = () => {
       // Real delta keeps easing and drift identical on 60/120/144Hz displays.
@@ -484,20 +618,25 @@ export function CylinderExplosionSphere({
       const dt = Math.min(0.05, clock.getDelta());
       time += dt;
 
-      smoothed += (progressRef.current - smoothed) * smoothK(0.12, dt);
-      const progress = smoothed;
+      // No exponential smoothing here on top of `progressRef.current` — HeroSection's
+      // own GSAP-scrubbed proxy tween (scrub: 0.65) already smooths raw scroll before
+      // this prop ever updates. A second smoothing pass stacked on top of that one
+      // just adds pure lag with no extra softness to show for it — it's what made the
+      // globe visibly arrive a beat late after the card's reveal finished.
+      const progress = progressRef.current;
 
       // This stage mounts early (see `stageMounted` in HeroSection) so its buffers are
-      // warm before the dot zoom lands — but until `sphereIn` starts it is fully
-      // transparent, and integrating every grain's position to render nothing was the
-      // single largest wasted cost during the cylinder rotation. Bail before the
-      // per-particle work, not after it.
+      // warm before the dot zoom lands — but `zoomProgress` sits at exactly 0 for the
+      // whole cylinder-rotation phase before it, and integrating every grain's position
+      // to render nothing was the single largest wasted cost during that phase. Bail
+      // before the per-particle work, not after it.
       frame = requestAnimationFrame(animate);
-      if (progress < PARTICLE_PHASES.sphereIn.start) {
+      if (progress < ACTIVE_THRESHOLD) {
         if (material.opacity !== 0) {
           material.opacity = 0;
           renderer.render(scene, camera);
         }
+        if (labelRef.current) labelRef.current.style.opacity = "0";
         return;
       }
 
@@ -530,7 +669,7 @@ export function CylinderExplosionSphere({
       const textBlend = beat > 0 ? 1 : beat === 0 ? morphT : 0;
       const sandBlend = pDunes * (1 - textBlend);
 
-      material.opacity = span(progress, PARTICLE_PHASES.sphereIn);
+      material.opacity = span(progress, PARTICLE_PHASES.globeIn);
 
       // ── Camera: lifts into a standing-in-the-desert view, then pushes in through the
       //     closing beat's scatter and settles back as the headline locks. ──
@@ -540,14 +679,16 @@ export function CylinderExplosionSphere({
       camera.position.z = CAM_Z + vista * 12 - dive * 62;
       camera.lookAt(0, vista * -7, 0);
 
-      // ── Sphere turns until the blast; everything after that is locked square-on ──
+      // ── Globe turns (auto-spin plus any drag offset) until the blast, which unwinds
+      //     it smoothly back to square-on — every explosion starts from the same
+      //     canonical orientation no matter how much the globe was dragged. ──
       if (pDunes < 1) {
-        points.rotation.y = time * 0.07 * (1 - pDunes);
-        points.rotation.x = time * 0.03 * (1 - pDunes);
+        globeGroup.rotation.y = (time * 0.07 + dragYOffset) * (1 - pDunes);
+        globeGroup.rotation.x = (time * 0.03 + dragXOffset) * (1 - pDunes);
       } else {
         const damp = smoothK(0.15, dt);
-        points.rotation.y -= points.rotation.y * damp;
-        points.rotation.x -= points.rotation.x * damp;
+        globeGroup.rotation.y -= globeGroup.rotation.y * damp;
+        globeGroup.rotation.x -= globeGroup.rotation.x * damp;
       }
 
       // Per-frame oscillator globals — the only trig calls in the whole frame.
@@ -682,7 +823,34 @@ export function CylinderExplosionSphere({
         lastBeat = beat;
       }
 
+      // Markers + popup: fade out over the first quarter of the blast, gone well
+      // before the dune field settles. Pulses gently while visible.
+      const markerVisibility = material.opacity * (1 - easeInOutCubic(clamp01(pDunes / 0.22)));
+      const pulse = 1 + Math.sin(time * 2.4) * 0.12;
+      for (let m = 0; m < MARKERS.length; m++) {
+        markerMaterials[m].opacity = markerVisibility;
+        markerMeshes[m].visible = markerVisibility > 0.01;
+        markerMeshes[m].scale.setScalar(sphereR * 0.018 * pulse);
+      }
+
       renderer.render(scene, camera);
+
+      // Park the active marker's label on top of its projected screen position, read
+      // straight off the DOM node rather than through React so a spinning globe never
+      // costs a re-render. Done after render() so `globeGroup.matrixWorld` — updated
+      // internally by render() — reflects this frame's rotation, not last frame's.
+      const label = labelRef.current;
+      if (label) {
+        if (markerVisibility > 0.01) {
+          const anchor = markerAnchors[activeMarkerRef.current];
+          projected.copy(anchor).applyMatrix4(globeGroup.matrixWorld).project(camera);
+          const front = projected.z < 1;
+          label.style.transform = `translate(-50%, -160%) translate(${((projected.x + 1) / 2) * width}px, ${((1 - projected.y) / 2) * height}px)`;
+          label.style.opacity = front ? String(markerVisibility) : "0";
+        } else {
+          label.style.opacity = "0";
+        }
+      }
     };
 
     frame = requestAnimationFrame(animate);
@@ -733,20 +901,42 @@ export function CylinderExplosionSphere({
       window.removeEventListener("resize", handleResize);
       if (resizeTimer) clearTimeout(resizeTimer);
       cancelAnimationFrame(frame);
+      if (fineCursor) {
+        renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+        renderer.domElement.removeEventListener("pointermove", onPointerMove);
+        renderer.domElement.removeEventListener("pointerup", endDrag);
+        renderer.domElement.removeEventListener("pointercancel", endDrag);
+      }
       geometry.dispose();
       material.dispose();
       particleTexture.dispose();
+      markerGeometry.dispose();
+      markerMaterials.forEach((m) => m.dispose());
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
       renderer.dispose();
     };
   }, [activeColor]);
+
+  const marker = MARKERS[activeMarker];
 
   return (
     <div
       ref={containerRef}
       className="absolute inset-0 z-40 w-full h-full pointer-events-none overflow-hidden"
       aria-hidden="true"
-    />
+    >
+      <div
+        ref={labelRef}
+        className="pointer-events-none absolute left-0 top-0 flex items-center gap-2 whitespace-nowrap rounded-xl border border-white/15 bg-surface-panel-carousel/90 px-3 py-2 shadow-[0_12px_30px_rgba(var(--black-rgb),0.5)] will-change-transform"
+        style={{ opacity: 0 }}
+      >
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: marker.color }} />
+        <span className="font-sans">
+          <span className="block text-[11px] font-semibold text-white">{marker.title}</span>
+          <span className="block text-[9px] text-white/50">{marker.meta}</span>
+        </span>
+      </div>
+    </div>
   );
 }
 

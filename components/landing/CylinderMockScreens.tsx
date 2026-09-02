@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { THEME_COLORS } from "@/constants/theme-colors";
 import {
   HANDOFF_CARD_RADIUS_CLASS,
   HANDOFF_CARD_SHELL_CLASS,
@@ -25,10 +24,15 @@ const FIELD_HIGHLIGHT = "border-brand-leaf/70 shadow-[0_0_0_3px_rgba(var(--brand
 function MockScreenShell({
   isFront,
   overflowVisible,
+  opacity,
   children,
 }: {
   isFront: boolean;
   overflowVisible?: boolean;
+  /** Fades the shell itself, not just its content — used while the wallet card is
+   *  zooming, so its own dark background doesn't sit visibly on top of the fullscreen
+   *  reveal (see `HeroZoomReveal`) once that's covering the screen. */
+  opacity?: number;
   children: React.ReactNode;
 }) {
   return (
@@ -36,6 +40,7 @@ function MockScreenShell({
       className={`relative flex h-full w-full flex-col ${HANDOFF_CARD_RADIUS_CLASS} ${
         isFront ? HANDOFF_CARD_SHELL_FRONT_CLASS : HANDOFF_CARD_SHELL_CLASS
       } ${overflowVisible ? "" : "overflow-hidden"} p-6 will-change-transform sm:p-7`}
+      style={opacity === undefined ? undefined : { opacity }}
     >
       {children}
     </div>
@@ -290,37 +295,10 @@ function TransferMockScreenBase({ isFront, title, description }: ScreenProps) {
   );
 }
 
-const zoomSmoothstep = (t: number) => t * t * (3 - 2 * t);
-
-function mixHex(c1: string, c2: string, t: number): string {
-  const mix = (a: number, b: number) => Math.round(a + t * (b - a));
-  const r = mix(parseInt(c1.slice(1, 3), 16), parseInt(c2.slice(1, 3), 16));
-  const g = mix(parseInt(c1.slice(3, 5), 16), parseInt(c2.slice(3, 5), 16));
-  const b = mix(parseInt(c1.slice(5, 7), 16), parseInt(c2.slice(5, 7), 16));
-  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
-}
-
-/**
- * The zoom dot's color, muted rather than the raw saturated brand-leaf (#c0fc01): at
- * the size this dot swells to, a flat full-saturation neon disc is genuinely hard to
- * look at, not just stylistically loud. Pre-mixes leaf down toward its own dark tone
- * before ever using it, so the dot starts life already desaturated, then eases
- * (smoothstep, not linear) the rest of the way to near-black as it swallows the card.
- */
-function zoomDotColor(t: number): string {
-  const isDark = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "dark";
-  const from = isDark ? THEME_COLORS.brandLeaf : THEME_COLORS.brandForest;
-  const to = isDark ? THEME_COLORS.black : THEME_COLORS.brandDark;
-  const c1 = from.startsWith("#") ? from : THEME_COLORS.brandLeaf;
-  const c2 = to.startsWith("#") ? to : THEME_COLORS.black;
-  const muted = mixHex(c1, c2, 0.45);
-  return mixHex(muted, c2, zoomSmoothstep(t));
-}
-
 interface WalletScreenProps extends ScreenProps {
-  /** Set only on the cylinder's last card — this screen doubles as the dot that swells
-   *  to swallow the viewport and hand off to the WebGL particle stage, exactly like the
-   *  old vault graphic's key-head dot did. */
+  /** Set only on the cylinder's last card. The fullscreen "swallow" reveal itself no
+   *  longer lives here — see `HeroZoomReveal` for why — but the row content still fades
+   *  out as it starts, so the card doesn't look frozen mid-transition. */
   zoomProgress?: number;
   isZoomingLastCard?: boolean;
 }
@@ -336,6 +314,11 @@ function WalletMockScreenBase({
   const zooming = zoomProgress > 0;
   const active = useCyclingHighlight(3, isFront && !zooming);
   const contentOpacity = zooming ? Math.max(0, 1 - zoomProgress * 3) : 1;
+  // Slower than the row content above, and deliberately so: `HeroZoomReveal` covers the
+  // screen from its own seed rectangle outward, and this card's own shell background
+  // (95% opaque) sat visibly on top of that reveal until it faded — too early a fade
+  // exposed whatever's behind the card before the reveal had grown to cover it.
+  const shellOpacity = zooming ? Math.max(0, 1 - zoomProgress / 0.55) : 1;
 
   const rows = [
     { label: "Personal Wallet", meta: "Recommended · auto trading" },
@@ -344,7 +327,7 @@ function WalletMockScreenBase({
   ];
 
   return (
-    <MockScreenShell isFront={isFront} overflowVisible={isZoomingLastCard}>
+    <MockScreenShell isFront={isFront} overflowVisible={isZoomingLastCard} opacity={shellOpacity}>
       <div style={{ opacity: contentOpacity }}>
         <ScreenHeader label="Wallet" meta="Non-Custodial" />
         <ScreenTitle title={title} description={description} />
@@ -366,29 +349,6 @@ function WalletMockScreenBase({
           ))}
         </div>
       </div>
-
-      {/* Swallows the card at the end of the rotation, handing off to the WebGL
-          particle stage. Centered on the card regardless of the row layout above,
-          since this is the one element that must keep growing past the card's edges.
-          A soft radial gradient with a feathered edge, not a flat saturated disc —
-          the blur fades out as it grows, since it only reads once the dot is still
-          small enough for its edge to be on screen at all. Scale eases (smoothstep)
-          rather than growing linearly, so the swell itself feels weighted, not sudden. */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute left-1/2 top-1/2 rounded-full"
-        style={{
-          width: 14,
-          height: 14,
-          zIndex: zooming ? 20 : -1,
-          transform: `translate(-50%, -50%) scale(${zooming ? 1 + zoomSmoothstep(zoomProgress) * 260 : 1})`,
-          background: zooming
-            ? `radial-gradient(circle at 38% 34%, ${mixHex(zoomDotColor(Math.min(1, zoomProgress / 0.5)), "#ffffff", 0.14)} 0%, ${zoomDotColor(Math.min(1, zoomProgress / 0.5))} 60%, ${mixHex(zoomDotColor(Math.min(1, zoomProgress / 0.5)), "#000000", 0.4)} 100%)`
-            : "transparent",
-          filter: zooming ? `blur(${(1 - Math.min(1, zoomProgress / 0.35)) * 2.5}px)` : undefined,
-          transition: zooming ? "none" : "transform 0.4s ease",
-        }}
-      />
     </MockScreenShell>
   );
 }
