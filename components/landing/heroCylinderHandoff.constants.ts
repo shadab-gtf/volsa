@@ -47,12 +47,20 @@ export const EXPANDED_CARD_PX = {
 
 export const HANDOFF_CARD_RADIUS_CLASS = "rounded-[32px] sm:rounded-[36px] md:rounded-[40px]";
 
-/** Minimal dark glass shell — thin border, no vignette/glow stack. Shared by every card: the hero/signal card and every cylinder card. */
+/**
+ * Minimal dark shell — thin border, no vignette/glow stack. Shared by every card: the
+ * hero/signal card and every cylinder card.
+ *
+ * Deliberately no `backdrop-blur`: six of these live inside the carousel's 3D transform
+ * at once, and a backdrop filter on a rotating, composited layer that size is one of the
+ * most expensive things you can ask a compositor for. At 95% background opacity there
+ * was essentially nothing showing through to blur anyway.
+ */
 export const HANDOFF_CARD_SHELL_CLASS =
-  "border border-white/15 bg-surface-panel-carousel/95 backdrop-blur-xl shadow-[0_20px_60px_rgba(var(--black-rgb),0.5)]";
+  "border border-white/15 bg-surface-panel-carousel/95 shadow-[0_20px_60px_rgba(var(--black-rgb),0.5)]";
 
 export const HANDOFF_CARD_SHELL_FRONT_CLASS =
-  "border-brand-leaf/60 bg-surface-panel-carousel/95 backdrop-blur-xl shadow-[0_20px_60px_rgba(var(--black-rgb),0.5)]";
+  "border-brand-leaf/60 bg-surface-panel-carousel/95 shadow-[0_20px_60px_rgba(var(--black-rgb),0.5)]";
 
 /** The cylinder's currently-front card (moves between cards as the carousel rotates) — HeroSection measures this directly, not the carousel's outer wrapper, since the card carries its own extra transform the wrapper doesn't. */
 export const HANDOFF_TARGET_ID = "cylinder-handoff-target";

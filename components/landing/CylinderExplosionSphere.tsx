@@ -19,10 +19,17 @@ const BRAND = {
 } as const;
 
 // ─── Scene constants ────────────────────────────────────────────────────────────
-/** Full-fat grain count. Dial this one number to trade density against frame budget. */
-const GRAINS_HIGH = 100000;
+/**
+ * Full-fat grain count. Dial this one number to trade density against frame budget.
+ *
+ * Every grain's position is integrated on the CPU each frame, so this number is the
+ * single biggest lever on scroll smoothness in the whole section — it was 100k, which
+ * measured far past the frame budget once the rest of the page was animating alongside
+ * it. At 55k the headlines still sample densely enough to read as solid letterforms.
+ */
+const GRAINS_HIGH = 55000;
 /** Fallback for phones and low-core machines — same look, a third of the CPU cost. */
-const GRAINS_LOW = 30000;
+const GRAINS_LOW = 18000;
 /** Grain diameter in world units. Sized just under the sphere's own grain spacing. */
 const GRAIN_SIZE = 0.3;
 /** Share of the budget the headlines consume; the remainder becomes ambient dust. */
@@ -480,6 +487,20 @@ export function CylinderExplosionSphere({
       smoothed += (progressRef.current - smoothed) * smoothK(0.12, dt);
       const progress = smoothed;
 
+      // This stage mounts early (see `stageMounted` in HeroSection) so its buffers are
+      // warm before the dot zoom lands — but until `sphereIn` starts it is fully
+      // transparent, and integrating every grain's position to render nothing was the
+      // single largest wasted cost during the cylinder rotation. Bail before the
+      // per-particle work, not after it.
+      frame = requestAnimationFrame(animate);
+      if (progress < PARTICLE_PHASES.sphereIn.start) {
+        if (material.opacity !== 0) {
+          material.opacity = 0;
+          renderer.render(scene, camera);
+        }
+        return;
+      }
+
       const posAttr = geometry.attributes.position as THREE.BufferAttribute;
       const colAttr = geometry.attributes.color as THREE.BufferAttribute;
       const posArray = posAttr.array as Float32Array;
@@ -662,7 +683,6 @@ export function CylinderExplosionSphere({
       }
 
       renderer.render(scene, camera);
-      frame = requestAnimationFrame(animate);
     };
 
     frame = requestAnimationFrame(animate);

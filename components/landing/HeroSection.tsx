@@ -474,7 +474,11 @@ export function HeroSection() {
             opacity: particleProgress > 0 ? Math.min(1, particleProgress / 0.045) : 0,
           }}
         >
-          {particleProgress < GLOBE_WINDOW_END && (
+          {/* Lower bound matters as much as the upper one: `particleProgress` sits at 0
+              for the whole cylinder-rotation phase, so a bare `< GLOBE_WINDOW_END`
+              check kept a second WebGL context alive (and building its geometry) all
+              the way through it. */}
+          {particleProgress > 0.002 && particleProgress < GLOBE_WINDOW_END && (
             <WorldSignalGlobe progress={Math.min(1, particleProgress / GLOBE_WINDOW_END)} />
           )}
           <CylinderExplosionSphere zoomProgress={particleProgress} activeColor={THEME_COLORS.brandLeaf} />

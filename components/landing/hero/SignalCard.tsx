@@ -122,7 +122,7 @@ interface SignalCardProps {
  * Cycles on a timer owned by HeroSection (see `index` above) that pauses on hover, and
  * the pair tabs drive it directly.
  */
-export function SignalCard({
+function SignalCardBase({
   isFront = true,
   expandProgress = 1,
   index,
@@ -458,3 +458,11 @@ export function SignalCard({
     </div>
   );
 }
+
+/**
+ * Memoised: this card is mounted twice (standalone hero copy + the cylinder's own card
+ * 0) and its parent re-renders on every scroll frame, but its props only change when the
+ * signal cycles or the expand phase moves — without this, two chart SVGs reconcile per
+ * frame throughout the pin.
+ */
+export const SignalCard = React.memo(SignalCardBase);

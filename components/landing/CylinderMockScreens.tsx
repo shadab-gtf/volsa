@@ -77,7 +77,7 @@ interface ScreenProps {
 }
 
 /** ─── Buy & Sell ─────────────────────────────────────────────────────── */
-export function BuySellMockScreen({ isFront, title, description }: ScreenProps) {
+function BuySellMockScreenBase({ isFront, title, description }: ScreenProps) {
   const active = useCyclingHighlight(2, isFront);
 
   return (
@@ -130,7 +130,7 @@ export function BuySellMockScreen({ isFront, title, description }: ScreenProps) 
 }
 
 /** ─── Convert ────────────────────────────────────────────────────────── */
-export function ConvertMockScreen({ isFront, title, description }: ScreenProps) {
+function ConvertMockScreenBase({ isFront, title, description }: ScreenProps) {
   const active = useCyclingHighlight(2, isFront);
 
   return (
@@ -189,7 +189,7 @@ export function ConvertMockScreen({ isFront, title, description }: ScreenProps) 
 }
 
 /** ─── Deposit / Withdraw ─────────────────────────────────────────────── */
-export function DepositWithdrawMockScreen({ isFront, title, description }: ScreenProps) {
+function DepositWithdrawMockScreenBase({ isFront, title, description }: ScreenProps) {
   const active = useCyclingHighlight(2, isFront);
 
   return (
@@ -245,7 +245,7 @@ export function DepositWithdrawMockScreen({ isFront, title, description }: Scree
 }
 
 /** ─── Transfer ───────────────────────────────────────────────────────── */
-export function TransferMockScreen({ isFront, title, description }: ScreenProps) {
+function TransferMockScreenBase({ isFront, title, description }: ScreenProps) {
   const active = useCyclingHighlight(2, isFront);
 
   return (
@@ -326,7 +326,7 @@ interface WalletScreenProps extends ScreenProps {
 }
 
 /** ─── Wallet ─────────────────────────────────────────────────────────── */
-export function WalletMockScreen({
+function WalletMockScreenBase({
   isFront,
   title,
   description,
@@ -392,3 +392,14 @@ export function WalletMockScreen({
     </MockScreenShell>
   );
 }
+
+/**
+ * Memoised exports. The carousel re-renders on every scroll frame as its rotation angle
+ * changes, but these screens only care about `isFront` and their (static) copy — without
+ * this, six full mock UIs reconcile per frame for nothing.
+ */
+export const BuySellMockScreen = React.memo(BuySellMockScreenBase);
+export const ConvertMockScreen = React.memo(ConvertMockScreenBase);
+export const DepositWithdrawMockScreen = React.memo(DepositWithdrawMockScreenBase);
+export const TransferMockScreen = React.memo(TransferMockScreenBase);
+export const WalletMockScreen = React.memo(WalletMockScreenBase);
