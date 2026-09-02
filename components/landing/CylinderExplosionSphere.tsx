@@ -45,8 +45,12 @@ const FOV = 50;
  * imports this so nothing can drift out of sync with the WebGL beats.
  *
  * Beat sheet:
- *   0.00 - 0.05  sphere blooms out of the dark
- *   0.05 - 0.14  lit sphere turns, surface breathing
+ *   0.00 - 0.11  WorldSignalGlobe owns the stage (its own component, its own 0-1
+ *                window) — bloom, idle-rotate, marker popups, fade out
+ *   0.11 - 0.115 a deliberate beat of plain black — see `sphereIn` below for why this
+ *                isn't a crossfade
+ *   0.115 - 0.138 this sphere fades in from black, condensing into a tighter lit ball
+ *                 right before the blast
  *   0.14 - 0.30  blast outward, gravity rakes it into a desert dune field
  *   0.30 - 0.33  dune vista holds (camera lifts to a standing-in-the-desert view)
  *   0.33 - 0.93  four text beats — see TEXT_BEATS
@@ -58,7 +62,7 @@ const FOV = 50;
  * headline instead means it physically scrolls off as the next section pushes in.
  */
 export const PARTICLE_PHASES = {
-  sphereIn: { start: 0.0, end: 0.05 },
+  sphereIn: { start: 0.115, end: 0.138 },
   explodeToDunes: { start: 0.14, end: 0.3 },
 } as const;
 

@@ -92,8 +92,10 @@ export interface Feature {
   title: string;
   description: string;
   tag: string;
-  stat?: { value: string; label: string };
-  visualPreset: "swarm" | "shield" | "router" | "matrix" | "oracle" | "vault";
+  /** Which self-contained mini product screen the cylinder card renders. "signal" is
+   *  the hero's own sample-signal card, grown to the cylinder's size — every other
+   *  preset is a small mock of that real app surface. */
+  visualPreset: "signal" | "buySell" | "convert" | "depositWithdraw" | "transfer" | "wallet";
 }
 
 export interface Step {
@@ -175,58 +177,52 @@ export function getHeroData() {
 export function getFeatures(): Feature[] {
   return [
     {
-      id: "ai-agents",
-      title: "Autonomous Intent Swarm",
+      id: "sample-signal",
+      title: "AI-Scanned Signals",
       description:
-        "Adaptive multi-agent consensus operating with zero latency MEV protection and real-time execution.",
-      tag: "MEV Shield · 8 Agents",
-      stat: { value: "0.2ms", label: "Consensus Latency" },
-      visualPreset: "swarm",
+        "Eight agents scan every 15 seconds and hand you a reconciled call — entry, target, stop and their confidence behind it.",
+      tag: "Live Sample · 8 Agents",
+      visualPreset: "signal",
     },
     {
-      id: "institutional-shield",
-      title: "Institutional ZK Shield",
+      id: "buy-sell",
+      title: "One-Tap Buy & Sell",
       description:
-        "Private state transitions with cryptographic multi-party computation and revocable permissions.",
-      tag: "Zero-Knowledge · MPC",
-      stat: { value: "100%", label: "Key Isolation" },
-      visualPreset: "shield",
+        "Act on a signal or trade on your own terms — routed at the best available price the moment you confirm.",
+      tag: "Instant Execution",
+      visualPreset: "buySell",
     },
     {
-      id: "smart-transfers",
-      title: "Cross-Chain Liquidity Router",
+      id: "convert",
+      title: "Any Coin, Same Chain",
       description:
-        "Dynamic gas-optimized pathfinding across 12+ EVM and SVM networks with all-in pricing.",
-      tag: "12+ Chains · Optimal Gas",
-      stat: { value: "0.01%", label: "Avg Slippage" },
-      visualPreset: "router",
+        "Swap any token you hold into any supported token — even ones you don't hold yet — at a flat routed fee.",
+      tag: "PancakeSwap Routed",
+      visualPreset: "convert",
     },
     {
-      id: "strategy-builder",
-      title: "Neural Strategy Matrix",
+      id: "deposit-withdraw",
+      title: "Deposit & Withdraw",
       description:
-        "Self-optimizing algorithmic execution models backtested against 10M+ blocks of historical data.",
-      tag: "10M+ Blocks · ML Models",
-      stat: { value: "99.9%", label: "Uptime SLA" },
-      visualPreset: "matrix",
+        "Fund your wallet by address or a connected browser wallet — funds land and start trading within seconds.",
+      tag: "BEP-20 · ~12s Confirm",
+      visualPreset: "depositWithdraw",
     },
     {
-      id: "predictions",
-      title: "Real-Time Volatility Oracle",
+      id: "transfer",
+      title: "Cross-Chain Transfer",
       description:
-        "Millisecond-precision sentiment, on-chain depth analysis, and regime detection algorithms.",
-      tag: "Sub-Second · Sentiment",
-      stat: { value: "24/7", label: "Real-time Telemetry" },
-      visualPreset: "oracle",
+        "Move value between your BSC and Solana wallets in one step — keep the coin or bridge to a different one.",
+      tag: "BSC ⇄ Solana",
+      visualPreset: "transfer",
     },
     {
-      id: "multi-wallet",
-      title: "Non-Custodial Key Vault",
+      id: "wallet",
+      title: "Your Keys, Your Wallet",
       description:
-        "Hardware-grade device signing where private keys never leave your possession. Zero custody risk.",
-      tag: "Non-Custodial · Biometric",
-      stat: { value: "$0", label: "Custody Exposure" },
-      visualPreset: "vault",
+        "A personal wallet built for auto-trading, or connect your own — WalletConnect and every major browser wallet.",
+      tag: "Non-Custodial",
+      visualPreset: "wallet",
     },
   ];
 }
@@ -611,7 +607,7 @@ export function getHeroSignals(): HeroSignal[] {
       entry: "—",
       target: "—",
       stop: "176.20",
-      trend: [0.55, 0.6, 0.52, 0.58, 0.5, 0.56, 0.62, 0.54, 0.6, 0.52, 0.57, 0.63, 0.55, 0.61, 0.54, 0.59, 0.52, 0.58, 0.55, 0.57],
+      trend: [0.52, 0.54, 0.57, 0.59, 0.58, 0.55, 0.53, 0.54, 0.57, 0.6, 0.61, 0.59, 0.56, 0.54, 0.55, 0.58, 0.6, 0.59, 0.57, 0.56],
       targetAt: 0.82,
       stopAt: 0.3,
       agents: [

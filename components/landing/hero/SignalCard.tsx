@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { getHeroSignals, type HeroSignal } from "@/services/landing.service";
 import { usePreloaderDone } from "@/hooks/usePreloaderDone";
@@ -8,11 +8,14 @@ import { usePointerParallax } from "@/hooks/usePointerParallax";
 import {
   HANDOFF_CARD_RADIUS_CLASS,
   HANDOFF_CARD_SHELL_CLASS,
+  HANDOFF_CARD_SHELL_FRONT_CLASS,
 } from "@/components/landing/heroCylinderHandoff.constants";
 import { Sparkline } from "./Sparkline";
 
-const SIGNALS = getHeroSignals();
-const CYCLE_MS = 5200;
+/** Exported so HeroSection can own the shared autoplay timer and signal count — see the
+ *  `index` prop doc below for why this card doesn't drive its own cycle any more. */
+export const SIGNALS = getHeroSignals();
+export const CYCLE_MS = 5200;
 
 type Direction = "up" | "down" | "flat";
 
@@ -86,22 +89,49 @@ function Rail({ at, label }: { at: number; label: string }) {
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
+interface SignalCardProps {
+  /** Leaf-tinted shell border, same as every other cylinder card's "front" state.
+   *  Defaults on: standalone in the hero, this card is always the front one. */
+  isFront?: boolean;
+  /** 0 = the compact card (header, price/action, chart only) — what sits in the hero
+   *  copy grid and rides the FLIP move to center. 1 = fully expanded: pair tabs, the
+   *  Entry/Target/Stop levels grid, the agent breakdown and the footer note are all
+   *  revealed too. Defaults to 1 — inside the cylinder this card is always expanded;
+   *  only Hero's standalone instance animates it down to 0 and back up. */
+  expandProgress?: number;
+  /** Which sample signal is showing. Lifted up to HeroSection rather than owned here:
+   *  this card mounts twice at once during the hand-off crossfade (the standalone hero
+   *  instance and the cylinder's own copy of it), and two independent autoplay timers
+   *  drift apart within seconds — the pair tabs on one card were seen highlighting SOL
+   *  while the price panel showed BNB. A single shared index makes that impossible. */
+  index: number;
+  onIndexSelect: (index: number) => void;
+  onHoverChange: (hovering: boolean) => void;
+}
+
 /**
- * Hero signal panel — a sample of what the Super Machine puts on screen.
+ * Hero signal panel — a sample of what the Super Machine puts on screen, and the
+ * cylinder carousel's first card. It starts compact in the hero copy grid, FLIPs to the
+ * cylinder's front-card slot, then grows in place into the fully-detailed version below
+ * — the same card the whole way, never swapped for a different design.
  *
- * Every field maps to the signal payload in the spec: asset, price, action, and trend.
- * Nothing here is invented beyond that.
+ * Every field maps to the signal payload in the spec: asset, price, action, strength,
+ * entry, target, stop-loss, and the agent readings behind the decision. Nothing here is
+ * invented beyond that.
  *
- * Cycles on a timer that pauses on hover. React state holds only the active index, which
- * changes every few seconds; everything per-frame is a GSAP transform or a CSS variable,
- * never a re-render.
+ * Cycles on a timer owned by HeroSection (see `index` above) that pauses on hover, and
+ * the pair tabs drive it directly.
  */
-export function SignalCard() {
+export function SignalCard({
+  isFront = true,
+  expandProgress = 1,
+  index,
+  onIndexSelect,
+  onHoverChange,
+}: SignalCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const tiltRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<HTMLDivElement>(null);
-  const [index, setIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
 
   const signal = SIGNALS[index];
   const theme = ACTION_THEME[signal.action];
@@ -110,14 +140,6 @@ export function SignalCard() {
   const isPreloaderDone = usePreloaderDone();
 
   usePointerParallax(tiltRef, { strength: 12 });
-
-  // Autoplay. One interval, cleared while the pointer rests on the card so reading it
-  // never races the cycle.
-  useEffect(() => {
-    if (paused || !isPreloaderDone) return;
-    const id = setInterval(() => setIndex((i) => (i + 1) % SIGNALS.length), CYCLE_MS);
-    return () => clearInterval(id);
-  }, [paused, isPreloaderDone]);
 
   // Crosshair. Run the pointer across the chart and a rule tracks it while a marker
   // rides the curve, sampled between points by linear interpolation so it sits on the
@@ -203,13 +225,19 @@ export function SignalCard() {
 
     const ctx = gsap.context(() => {
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        gsap.set(
-          ".card-shell, .card-head, .card-pair, .card-price, .card-badge, .card-change, .chart-rail",
-          { opacity: 1, clearProps: "transform,clipPath" }
-        );
+        gsap.set(".card-shell, .card-head, .card-pair, .card-price, .card-badge, .card-change, .chart-rail", {
+          opacity: 1,
+          clearProps: "transform,clipPath",
+        });
         return;
       }
 
+      // Deliberately stops at the chart: the pair tabs, levels grid, agent breakdown
+      // and footer note aren't entrance-animated here at all — they're gated behind
+      // `expandProgress` instead (see the render below), which starts at 0 for the
+      // standalone hero instance and only ramps up once the card has FLIPped to the
+      // cylinder's slot. Animating them in here too would mean they're already sitting
+      // fully revealed underneath the clip the moment expandProgress finally opens it.
       gsap
         .timeline({ defaults: { ease: "power3.out" } })
         .fromTo(".card-shell", { opacity: 0, y: 44, scale: 0.985 }, { opacity: 1, y: 0, scale: 1, duration: 1 })
@@ -245,13 +273,14 @@ export function SignalCard() {
       gsap
         .timeline({ defaults: { ease: "power3.out" } })
         .fromTo(
-          ".card-pair, .card-price, .card-badge, .card-change",
+          ".card-pair, .card-price, .card-badge, .card-change, .card-level, .card-conf",
           { opacity: 0, y: 10 },
           { opacity: 1, y: 0, duration: 0.5, stagger: 0.035 }
         )
         .fromTo(".chart-plot", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 1.05, ease: "power2.inOut" }, 0)
         .fromTo(".chart-rail", { opacity: 0, x: -8 }, { opacity: 1, x: 0, duration: 0.55, stagger: 0.08 }, 0.3)
-        .fromTo(".chart-head", { scale: 0 }, { scale: 1, duration: 0.45, ease: "back.out(2)" }, 0.95);
+        .fromTo(".chart-head", { scale: 0 }, { scale: 1, duration: 0.45, ease: "back.out(2)" }, 0.95)
+        .fromTo(".agent-bar", { scaleX: 0 }, { scaleX: 1, duration: 0.7, stagger: 0.06, ease: "power2.out" }, 0.18);
     }, cardRef);
 
     return () => ctx.revert();
@@ -260,13 +289,15 @@ export function SignalCard() {
   return (
     <div
       ref={cardRef}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
+      onMouseEnter={() => onHoverChange(true)}
+      onMouseLeave={() => onHoverChange(false)}
       className="h-full w-full"
     >
       <div
         ref={tiltRef}
-        className={`card-shell flex h-full flex-col opacity-0 ${HANDOFF_CARD_RADIUS_CLASS} ${HANDOFF_CARD_SHELL_CLASS} p-6 will-change-transform sm:p-8`}
+        className={`card-shell flex h-full flex-col opacity-0 ${HANDOFF_CARD_RADIUS_CLASS} ${
+          isFront ? HANDOFF_CARD_SHELL_FRONT_CLASS : HANDOFF_CARD_SHELL_CLASS
+        } overflow-hidden p-6 will-change-transform sm:p-8`}
       >
         {/* Header */}
         <div className="card-head flex items-center justify-between gap-3">
@@ -280,6 +311,34 @@ export function SignalCard() {
           <span className="font-sans text-[10px] uppercase tracking-[0.16em] text-white/40">
             scan · 15s
           </span>
+        </div>
+
+        {/* Pair tabs — revealed only once expanded. `maxHeight` (capped well above the
+            row's real height, so it finishes opening early) grows the layout space
+            smoothly without depending on grid/flex intrinsic-sizing edge cases; the
+            clip-path + opacity on the inner layer is what actually gives it the wipe,
+            and keeps animating for the rest of the expand phase after maxHeight has
+            already cleared out of the way. */}
+        <div className="overflow-hidden" style={{ maxHeight: expandProgress * 200 }}>
+          <div
+            className="overflow-hidden"
+            style={{ clipPath: `inset(0 0 ${(1 - expandProgress) * 100}% 0)`, opacity: expandProgress }}
+          >
+            <div className="mt-4 flex gap-1 rounded-xl bg-primary/5 p-1">
+              {SIGNALS.map((s, i) => (
+                <button
+                  key={s.pair}
+                  onClick={() => onIndexSelect(i)}
+                  aria-pressed={i === index}
+                  className={`card-tab flex-1 rounded-lg px-2 py-1.5 font-sans text-[11px] font-semibold uppercase tracking-wider transition-colors duration-300 ${
+                    i === index ? "bg-primary text-primary-foreground shadow-sm" : "text-white/45 hover:text-white"
+                  }`}
+                >
+                  {s.pair.split(" / ")[0]}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Price + action */}
@@ -336,6 +395,64 @@ export function SignalCard() {
                 "translate(calc(var(--cx) * var(--track, 100%) - 50%), calc(var(--cy) * var(--track-y, 100%) - 50%))",
             }}
           />
+        </div>
+
+        {/* Levels + agent breakdown + footer note — same expand gating as the pair tabs
+            above, revealed together as one block once the card has grown into the
+            cylinder's first card. */}
+        <div className="shrink-0 overflow-hidden" style={{ maxHeight: expandProgress * 500 }}>
+          <div
+            className="overflow-hidden"
+            style={{ clipPath: `inset(0 0 ${(1 - expandProgress) * 100}% 0)`, opacity: expandProgress }}
+          >
+            {/* Levels */}
+            <div className="mt-5 grid grid-cols-3 gap-3 border-y border-white/10 py-3.5">
+              {[
+                ["Entry", signal.entry],
+                ["Target", signal.target],
+                ["Stop", signal.stop],
+              ].map(([label, value]) => (
+                <div key={label} className="card-level">
+                  <p className="font-sans text-[9px] uppercase tracking-[0.14em] text-white/40">{label}</p>
+                  <p className="mt-1 font-heading text-lg tabular-nums text-white">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Agent breakdown — the decision layer's inputs, not a black box */}
+            <div className="mt-4">
+              <div className="flex items-baseline justify-between">
+                <p className="card-conf font-sans text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
+                  8 agents · confidence
+                </p>
+                {/* The heading face ships no percent glyph, so the sign is set in sans. */}
+                <p className={`card-conf ${theme.accent}`}>
+                  <span className="font-heading text-xl tabular-nums">{signal.confidence}</span>
+                  <span className="font-sans text-xs font-semibold">%</span>
+                </p>
+              </div>
+
+              <div className="mt-3 space-y-2.5">
+                {signal.agents.map((agent) => (
+                  <div key={agent.label} className="agent-row flex items-center gap-3">
+                    <span className="w-[4.75rem] shrink-0 font-sans text-[10px] uppercase tracking-wider text-white/45">
+                      {agent.label}
+                    </span>
+                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-primary/10">
+                      <span
+                        className={`agent-bar block h-full origin-left rounded-full bg-gradient-to-r ${theme.bar}`}
+                        style={{ width: `${agent.value}%` }}
+                      />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <p className="card-note mt-5 border-t border-white/10 pt-3 font-sans text-[9px] uppercase tracking-[0.14em] text-white/30">
+              Illustrative · not investment advice
+            </p>
+          </div>
         </div>
       </div>
     </div>

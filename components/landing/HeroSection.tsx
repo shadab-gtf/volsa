@@ -10,9 +10,14 @@ import { getHero, getFeatures } from "@/services/landing.service";
 import { Button } from "@/components/ui/Button";
 import { usePreloaderDone } from "@/hooks/usePreloaderDone";
 import { usePointerParallax } from "@/hooks/usePointerParallax";
-import { HANDOFF_CARD_SIZE_CLASS, HANDOFF_TARGET_ID } from "./heroCylinderHandoff.constants";
+import {
+  COMPACT_CARD_PX,
+  EXPANDED_CARD_PX,
+  HANDOFF_CARD_SIZE_CLASS,
+  HANDOFF_TARGET_ID,
+} from "./heroCylinderHandoff.constants";
 import { HeroBackground } from "./HeroBackground";
-import { SignalCard } from "./hero/SignalCard";
+import { SignalCard, SIGNALS as HERO_SIGNALS, CYCLE_MS as SIGNAL_CYCLE_MS } from "./hero/SignalCard";
 import { Cylinder3DCarousel } from "./Cylinder3DCarousel";
 import { FeaturesMarqueeBackdrop } from "./FeaturesMarqueeBackdrop";
 import { TEXT_BEATS } from "./cylinderExplosion.data";
@@ -27,6 +32,25 @@ const CylinderExplosionSphere = dynamic(
   () => import("./CylinderExplosionSphere").then((m) => m.CylinderExplosionSphere),
   { ssr: false }
 );
+
+/**
+ * Same story as above, plus this one drags in three-globe geometry helpers
+ * (topojson-client/d3-geo) that nothing else on the page needs — mounted only for the
+ * brief window before the dune explosion takes over, then unmounted again.
+ */
+const WorldSignalGlobe = dynamic(
+  () => import("./WorldSignalGlobe").then((m) => m.WorldSignalGlobe),
+  { ssr: false }
+);
+
+/** Where the signal globe's own 0-1 window ends, in `particleProgress` terms — past
+ *  this point it's unmounted entirely and CylinderExplosionSphere's sand/headline
+ *  sequence owns the stage, exactly as before this globe existed. Left with a small
+ *  gap before CylinderExplosionSphere's own `PARTICLE_PHASES.sphereIn` starts (see
+ *  that file) rather than overlapping it: the two are different enough shapes — a
+ *  dotted world map versus a solid lambert-shaded ball — that fading one in while the
+ *  other is still fading out reads as a blobby double-exposure, not a clean handoff. */
+const GLOBE_WINDOW_END = 0.11;
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -50,10 +74,14 @@ const features = getFeatures();
  *   1. Entrance, gated on the preloader — one timeline, transform/opacity only.
  *   2. Pointer parallax via a shared hook (coalesced, opt-out on touch).
  *   3. Hand-off phase (0 → heroFrac of the pin): copy fades, the card FLIPs to the
- *      cylinder's front-card slot, then crossfades into the (until-now invisible)
- *      cylinder group right there.
+ *      cylinder's front-card slot, grows in place into the cylinder's full card size —
+ *      revealing the pair tabs / levels / agent breakdown it didn't have room for while
+ *      compact — then crossfades into the (until-now invisible) cylinder group sitting
+ *      right there, already showing that same expanded card as its own first card. The
+ *      card is never swapped for a different design; the cylinder just picks up where
+ *      the hero card's own growth left off.
  *   4. Feature phase (heroFrac → 1): the cylinder rotates through the cards, the active
- *      card's key dot zooms out to swallow the viewport, then the WebGL particle stage
+ *      card's zoom dot swells to swallow the viewport, then the WebGL particle stage
  *      takes over. This math is unchanged from the original FeaturesSection — only
  *      renumbered onto the shared 0–1 progress this component now owns.
  */
@@ -72,6 +100,25 @@ export function HeroSection() {
   const [currentAngle, setCurrentAngle] = useState(0);
   const [zoomProgress, setZoomProgress] = useState(0);
   const [particleProgress, setParticleProgress] = useState(0);
+  // 0 = the card is still compact (hero grid, or mid-FLIP). 1 = it has grown into the
+  // cylinder's full size and revealed its expanded content. Drives both the standalone
+  // card's own content reveal and the prop the cylinder hands its own copy of it.
+  const [expandProgress, setExpandProgress] = useState(0);
+
+  // The sample-signal card's own index/hover-pause, owned here rather than inside
+  // SignalCard: the card mounts twice at once during the crossfade (the standalone hero
+  // instance and the cylinder's own copy of it), and two independent autoplay timers
+  // drift apart within seconds — the pair tabs on one card were seen highlighting a
+  // different pair than the price panel showed. A single shared timer makes that
+  // impossible; both instances just render whatever it says.
+  const [signalIndex, setSignalIndex] = useState(0);
+  const [signalPaused, setSignalPaused] = useState(false);
+
+  useEffect(() => {
+    if (signalPaused || !isPreloaderDone) return;
+    const id = setInterval(() => setSignalIndex((i) => (i + 1) % HERO_SIGNALS.length), SIGNAL_CYCLE_MS);
+    return () => clearInterval(id);
+  }, [signalPaused, isPreloaderDone]);
 
   // Mounting the WebGL stage costs a synchronous burst of work — 100k particle buffers
   // plus the first headline sampling. Doing that at the moment the sphere is meant to
@@ -129,15 +176,31 @@ export function HeroSection() {
     const anglePerCard = 360 / features.length;
     const totalRotation = -(features.length - 1) * anglePerCard;
 
+    // Compact/expanded pixel sizes at the current breakpoint — re-picked on every
+    // measure (mount + resize) since which breakpoint applies can change. Tailwind
+    // classes can't be interpolated frame by frame, so the expand phase below drives
+    // the wrapper's width/height from these numbers directly instead.
+    const pickPx = (table: typeof COMPACT_CARD_PX) => {
+      const w = window.innerWidth;
+      if (w >= 768) return table.md;
+      if (w >= 640) return table.sm;
+      return table.base;
+    };
+    let compact = pickPx(COMPACT_CARD_PX);
+    let expanded = pickPx(EXPANDED_CARD_PX);
+
     // The card FLIPs to wherever the cylinder's front card actually sits (its own
     // centered layout, not a guessed viewport position) — both live in this same pinned
     // box now, so the target is always laid out and measurable, pinned or not.
     const delta = { x: 0, y: 0 };
     const measureDelta = () => {
+      compact = pickPx(COMPACT_CARD_PX);
+      expanded = pickPx(EXPANDED_CARD_PX);
+
       const targetEl = document.getElementById(HANDOFF_TARGET_ID);
       if (!targetEl) return;
 
-      gsap.set(cardWrapper, { x: 0, y: 0 });
+      gsap.set(cardWrapper, { x: 0, y: 0, width: compact.w, height: compact.h });
 
       const cardRect = cardWrapper.getBoundingClientRect();
       const targetRect = targetEl.getBoundingClientRect();
@@ -148,13 +211,13 @@ export function HeroSection() {
     const ctx = gsap.context(() => {
       measureDelta();
 
-      // Room for the fade/move/hold/crossfade hand-off, then the original
+      // Room for the fade/move/expand/crossfade hand-off, then the original
       // FeaturesSection runway (rotation, dot zoom, four particle text beats) unchanged.
-      // 2.2x rather than a tighter multiple specifically so the crossfade below gets a
-      // generous scroll distance to play out over — a short window reads as an instant
-      // swap no matter how it's eased, since there's barely any scroll for the eased
-      // curve to actually traverse.
-      const HERO_RUNWAY = window.innerHeight * 2.2;
+      // 2.4x rather than a tighter multiple specifically so each phase below — especially
+      // the expand and the crossfade — gets a generous scroll distance to play out over;
+      // a short window reads as an instant cut no matter how it's eased, since there's
+      // barely any scroll for the eased curve to actually traverse.
+      const HERO_RUNWAY = window.innerHeight * 2.4;
       const FEATURES_RUNWAY = window.innerHeight * 16.5;
       const heroFrac = HERO_RUNWAY / (HERO_RUNWAY + FEATURES_RUNWAY);
 
@@ -162,78 +225,121 @@ export function HeroSection() {
       // opacity both ease in and out rather than starting/stopping abruptly.
       const smoothstep = (t: number) => t * t * (3 - 2 * t);
 
+      // Everything below reads `p`, not `self.progress` directly: a plain scroll listener
+      // snaps to wherever the wheel/trackpad delta lands, so one fast notch would jump
+      // every gsap.set() here straight to its new value no matter how the smoothstep
+      // curves shape the motion in between. Routing progress through a tween scrubbed by
+      // a numeric `scrub` gives GSAP's own (frame-rate-correct, already-tested) catch-up
+      // interpolation instead — the whole hand-off gets real time-based duration, so it
+      // eases smoothly toward the target progress rather than teleporting to it.
+      const applyProgress = (p: number) => {
+        if (p <= heroFrac) {
+          const hp = p / heroFrac;
+
+          // Phase 1 (0 → 0.16 of hp): the copy fades out.
+          gsap.set(leftCol, { opacity: 1 - Math.min(1, hp / 0.16) });
+
+          // Phase 2 (0.14 → 0.46 of hp): the card FLIPs to the cylinder's front-card
+          // slot, smoothstep-eased, still at its compact size.
+          const moveT = smoothstep(Math.min(1, Math.max(0, (hp - 0.14) / 0.32)));
+          gsap.set(cardWrapper, {
+            x: delta.x * moveT,
+            y: delta.y * moveT,
+          });
+
+          // Phase 3 (0.46 → 0.78 of hp): once centered, the card grows in place from
+          // its compact size to the cylinder's full card size — revealing the pair
+          // tabs, levels grid and agent breakdown it didn't have room for while
+          // compact. `expandT` drives both the wrapper's own width/height (below) and
+          // the card's internal clip-path reveal (via the `expandProgress` prop).
+          const expandT = smoothstep(Math.min(1, Math.max(0, (hp - 0.46) / 0.32)));
+          gsap.set(cardWrapper, {
+            width: compact.w + (expanded.w - compact.w) * expandT,
+            height: compact.h + (expanded.h - compact.h) * expandT,
+          });
+          setExpandProgress(expandT);
+
+          // Phase 4 (0.8 → 1.0 of hp): now that both cards are the same size and show
+          // the same content, the card crossfades into the cylinder group, which has
+          // been sitting at opacity 0 (invisible, not just "behind") this whole time —
+          // this is the only place its opacity ever moves off 0 before this. Nothing
+          // visibly changes at the swap itself; the two cards are identical here.
+          const crossT = smoothstep(Math.min(1, Math.max(0, (hp - 0.8) / 0.2)));
+          gsap.set(cardWrapper, { opacity: 1 - crossT });
+          gsap.set(featuresGroup, { opacity: crossT });
+          gsap.set(heroGroup, { pointerEvents: "auto" });
+
+          // Scrolling back up out of the feature phase leaves `currentAngle` (and the
+          // zoom/particle progress) wherever they last were — nothing here ever resets
+          // them, since only the feature-phase branch below sets them. Reset every
+          // frame the hero phase is active, so the cylinder is always at rest (card 0
+          // square to the viewer) whenever this phase's own pixel-perfect crossfade
+          // target is measured, and so a stale particle overlay can't linger behind it.
+          setCurrentAngle(0);
+          setActiveIndex(0);
+          setZoomProgress(0);
+          setParticleProgress(0);
+        } else {
+          gsap.set(leftCol, { opacity: 0 });
+          gsap.set(cardWrapper, { opacity: 0 });
+          gsap.set(featuresGroup, { opacity: 1 });
+          gsap.set(heroGroup, { pointerEvents: "none" });
+          setExpandProgress(1);
+
+          // From here down: identical math to the original FeaturesSection, just fed
+          // by `subP` (this phase's own 0–1) instead of the whole pin's progress.
+          const subP = (p - heroFrac) / (1 - heroFrac);
+
+          const rotationProgress = Math.min(1, subP / 0.32);
+          setCurrentAngle(rotationProgress * totalRotation);
+
+          const cardIndex = Math.min(
+            features.length - 1,
+            Math.max(0, Math.round(rotationProgress * (features.length - 1)))
+          );
+          setActiveIndex(cardIndex);
+
+          setZoomProgress(Math.min(1, Math.max(0, (subP - 0.32) / 0.055)));
+          setParticleProgress(Math.min(1, Math.max(0, (subP - 0.375) / 0.625)));
+
+          if (!stageMountedRef.current && subP > 0.14) {
+            stageMountedRef.current = true;
+            setStageMounted(true);
+          }
+
+          // Header fades out as the dot zoom starts, same window FeaturesSection
+          // always used (0.315–0.37 of the feature phase). Its fade-in is free: it's
+          // a descendant of `featuresGroup`, whose own opacity already carried it in
+          // during the crossfade above.
+          if (headerEl) {
+            const headerFadeT = Math.min(1, Math.max(0, (subP - 0.315) / 0.055));
+            gsap.set(headerEl, { opacity: 1 - headerFadeT });
+          }
+        }
+      };
+
+      // The scrubbed proxy tween: ScrollTrigger drives `proxy.p` from 0 to 1 across the
+      // pin's scroll range, but a numeric `scrub` makes it lag behind the raw scroll
+      // position by that many seconds, catching up smoothly instead of matching it
+      // frame-for-frame — this is what actually removes the jerk, independent of the
+      // smoothstep shaping inside applyProgress above.
+      const proxy = { p: 0 };
+      const progressTween = gsap.to(proxy, {
+        p: 1,
+        ease: "none",
+        duration: 1,
+        onUpdate: () => applyProgress(proxy.p),
+      });
+
       ScrollTrigger.create({
         trigger: section,
         pin: section,
         pinSpacing: true,
         start: "top top",
         end: () => `+=${HERO_RUNWAY + FEATURES_RUNWAY}`,
+        scrub: 0.65,
+        animation: progressTween,
         onRefresh: measureDelta,
-        onUpdate: (self) => {
-          const p = self.progress;
-
-          if (p <= heroFrac) {
-            const hp = p / heroFrac;
-
-            // Phase 1 (0 → 0.28 of hp): the copy fades out.
-            gsap.set(leftCol, { opacity: 1 - Math.min(1, hp / 0.28) });
-
-            // Phase 2 (0.22 → 0.58 of hp): the card FLIPs to the cylinder's front-card
-            // slot, smoothstep-eased. 0.58 → 0.7 is a deliberate hold: the card sits
-            // centered and settled before the crossfade below picks it up.
-            const moveT = Math.min(1, Math.max(0, (hp - 0.22) / 0.36));
-            gsap.set(cardWrapper, {
-              x: delta.x * smoothstep(moveT),
-              y: delta.y * smoothstep(moveT),
-            });
-
-            // Phase 3 (0.7 → 1.0 of hp): card crossfades into the cylinder group, which
-            // has been sitting at opacity 0 (invisible, not just "behind") this whole
-            // time — this is the only place its opacity ever moves off 0 before this.
-            // A wide, eased window on purpose: this is the one moment where the hero
-            // card visibly becomes the cylinder's front card, so it gets the most
-            // scroll distance and the softest curve of any phase here.
-            const crossT = smoothstep(Math.min(1, Math.max(0, (hp - 0.7) / 0.3)));
-            gsap.set(cardWrapper, { opacity: 1 - crossT });
-            gsap.set(featuresGroup, { opacity: crossT });
-            gsap.set(heroGroup, { pointerEvents: "auto" });
-          } else {
-            gsap.set(leftCol, { opacity: 0 });
-            gsap.set(cardWrapper, { opacity: 0 });
-            gsap.set(featuresGroup, { opacity: 1 });
-            gsap.set(heroGroup, { pointerEvents: "none" });
-
-            // From here down: identical math to the original FeaturesSection, just fed
-            // by `subP` (this phase's own 0–1) instead of the whole pin's progress.
-            const subP = (p - heroFrac) / (1 - heroFrac);
-
-            const rotationProgress = Math.min(1, subP / 0.32);
-            setCurrentAngle(rotationProgress * totalRotation);
-
-            const cardIndex = Math.min(
-              features.length - 1,
-              Math.max(0, Math.round(rotationProgress * (features.length - 1)))
-            );
-            setActiveIndex(cardIndex);
-
-            setZoomProgress(Math.min(1, Math.max(0, (subP - 0.32) / 0.055)));
-            setParticleProgress(Math.min(1, Math.max(0, (subP - 0.375) / 0.625)));
-
-            if (!stageMountedRef.current && subP > 0.14) {
-              stageMountedRef.current = true;
-              setStageMounted(true);
-            }
-
-            // Header fades out as the dot zoom starts, same window FeaturesSection
-            // always used (0.315–0.37 of the feature phase). Its fade-in is free: it's
-            // a descendant of `featuresGroup`, whose own opacity already carried it in
-            // during the crossfade above.
-            if (headerEl) {
-              const headerFadeT = Math.min(1, Math.max(0, (subP - 0.315) / 0.055));
-              gsap.set(headerEl, { opacity: 1 - headerFadeT });
-            }
-          }
-        },
       });
     }, section);
 
@@ -308,7 +414,12 @@ export function HeroSection() {
           {/* ── Product proof ── */}
           <div className="flex items-center justify-center">
             <div ref={cardWrapperRef} className={`relative z-30 ${HANDOFF_CARD_SIZE_CLASS} will-change-transform`}>
-              <SignalCard />
+              <SignalCard
+                expandProgress={expandProgress}
+                index={signalIndex}
+                onIndexSelect={setSignalIndex}
+                onHoverChange={setSignalPaused}
+              />
             </div>
           </div>
         </div>
@@ -332,6 +443,10 @@ export function HeroSection() {
             cylinderRef={cylinderRef}
             currentAngle={currentAngle}
             zoomProgress={zoomProgress}
+            expandProgress={expandProgress}
+            signalIndex={signalIndex}
+            onSignalIndexSelect={setSignalIndex}
+            onSignalHoverChange={setSignalPaused}
           />
         </div>
 
@@ -359,6 +474,9 @@ export function HeroSection() {
             opacity: particleProgress > 0 ? Math.min(1, particleProgress / 0.045) : 0,
           }}
         >
+          {particleProgress < GLOBE_WINDOW_END && (
+            <WorldSignalGlobe progress={Math.min(1, particleProgress / GLOBE_WINDOW_END)} />
+          )}
           <CylinderExplosionSphere zoomProgress={particleProgress} activeColor={THEME_COLORS.brandLeaf} />
         </div>
       )}
