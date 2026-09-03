@@ -237,9 +237,13 @@ export function FooterSection() {
 
         <div className="relative z-10 max-w-7xl mx-auto w-full">
           {/* Top Columns Grid — Original Project Links */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-0 divide-y lg:divide-y-0 lg:divide-x divide-footer-fg/10 border-b border-footer-fg/10 pb-12">
+          {/* Two link columns side by side on phones rather than one long stack. The
+              horizontal rules are desktop-only now: `divide-y` runs between grid items
+              in DOM order, which on a two-column grid draws a rule through the middle
+              of each row instead of between rows. Gap does the separating instead. */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-8 lg:gap-0 lg:divide-x divide-footer-fg/10 border-b border-footer-fg/10 pb-10 sm:pb-12">
             {/* Column 1: Product (NAV_LINKS) */}
-            <div className="footer-col-group lg:pr-8 pt-6 lg:pt-0">
+            <div className="footer-col-group lg:pr-8">
               <h4 className="text-xs font-bold text-footer-fg mb-3 font-sans">Product</h4>
               <ul className="space-y-2">
                 {NAV_LINKS.map((link) => (
@@ -260,7 +264,7 @@ export function FooterSection() {
             </div>
 
             {/* Column 2: Resources */}
-            <div className="footer-col-group lg:px-8 pt-6 lg:pt-0">
+            <div className="footer-col-group lg:px-8">
               <h4 className="text-xs font-bold text-footer-fg mb-3 font-sans">Resources</h4>
               <ul className="space-y-2">
                 {RESOURCES_LINKS.map((link) => (
@@ -277,7 +281,7 @@ export function FooterSection() {
             </div>
 
             {/* Column 3: Legal */}
-            <div className="footer-col-group lg:px-8 pt-6 lg:pt-0">
+            <div className="footer-col-group lg:px-8">
               <h4 className="text-xs font-bold text-footer-fg mb-3 font-sans">Legal</h4>
               <ul className="space-y-2">
                 {LEGAL_LINKS.map((link) => (
@@ -294,7 +298,9 @@ export function FooterSection() {
             </div>
 
             {/* Column 4: Community & Security */}
-            <div className="footer-col-group lg:pl-8 pt-6 lg:pt-0 flex flex-col justify-between gap-6">
+            {/* Social chips and the compliance badge need the full width on phones —
+                they don't fit in a half-column, so this one spans the row. */}
+            <div className="footer-col-group col-span-2 lg:col-span-1 lg:pl-8 flex flex-col justify-between gap-6 border-t border-footer-fg/10 pt-8 lg:border-t-0 lg:pt-0">
               <div>
                 <h4 className="text-xs font-bold text-footer-fg mb-3 font-sans">Social</h4>
                 <div className="flex flex-wrap gap-2 mb-4">

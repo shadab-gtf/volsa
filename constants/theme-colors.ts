@@ -17,8 +17,12 @@ export const THEME_COLORS = {
   surface: "#f7fdf4",
 
   signalUp: "#3f780d",
+  signalUpSoft: "#c0fc01",
   signalDown: "#b3350f",
+  signalDownSoft: "#e0a68d",
+  signalDownBright: "#ff4d3d",
   signalFlat: "#8a6508",
+  signalFlatSoft: "#d9c384",
 
   white: "#ffffff",
   whiteRgb: "255, 255, 255",
@@ -27,9 +31,19 @@ export const THEME_COLORS = {
   brandGlow: "#c6f19a",
   brandGlowRgb: "198, 241, 154",
   brandGlowBright: "#8fe331",
+  brandGlowBrightRgb: "143, 227, 49",
   brandGlowSoft: "#9adc4a",
+  brandGlowSoftRgb: "154, 220, 74",
   brandRim: "#a6f04e",
   brandMist: "#d8f3d1",
+  brandMistRgb: "216, 243, 209",
+  brandSlate: "#899089",
+  brandSlateRgb: "137, 144, 137",
+
+  brandForestRgb: "34, 72, 11",
+  brandLeafRgb: "192, 252, 1",
+  brandDarkRgb: "18, 40, 5",
+  surfaceRgb: "247, 253, 244",
 
   brandLogoLight: "#7acc22",
   brandLogoMid: "#4da012",

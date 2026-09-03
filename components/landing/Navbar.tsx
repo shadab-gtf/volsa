@@ -195,14 +195,19 @@ export function Navbar() {
 
   return (
     <>
-      {/* Edge-to-Edge Full Screen Header */}
+      {/* Edge-to-Edge Full Screen Header.
+          `backdrop-filter` is deliberately absent from the transition list below:
+          interpolating a blur radius makes the browser regenerate the blurred backdrop
+          bitmap on every frame of the 500ms fade, across the full header width. The blur
+          snaps instead while the colors and shadow still fade — identical at both rest
+          states, which is all anyone sees. */}
       <nav
         ref={navRef}
         style={{
           opacity: isPreloaderDone ? undefined : 0,
           transform: isPreloaderDone ? undefined : "translateY(-100%)",
         }}
-        className={`fixed top-0 left-0 right-0 z-50 w-full px-6 sm:px-12 py-4 flex items-center justify-between will-change-transform transition-[background-color,border-color,box-shadow,backdrop-filter] duration-500 ease-out ${
+        className={`fixed top-0 left-0 right-0 z-50 w-full px-6 sm:px-12 py-4 flex items-center justify-between will-change-transform transition-[background-color,border-color,box-shadow] duration-500 ease-out ${
           isScrolled && !menuOpen
             ? "bg-surface/80 backdrop-blur-md border-b border-brand-forest/10 shadow-[0_1px_24px_-12px_rgba(var(--brand-dark-rgb),0.35)]"
             : "bg-transparent border-b border-transparent shadow-none"

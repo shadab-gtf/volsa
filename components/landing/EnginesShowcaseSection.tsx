@@ -200,7 +200,7 @@ function BentoCard({
 }) {
   return (
     <article
-      className="bento-card group relative flex flex-1 min-h-0 flex-col justify-between overflow-hidden rounded-[1.5rem] sm:rounded-[1.75rem] border border-border/60 bg-card p-6 sm:p-7 text-card-foreground shadow-[0_20px_40px_rgba(var(--black-rgb),0.35)] transition-transform duration-500 ease-out will-change-transform hover:-translate-y-1.5"
+      className="bento-card group relative flex flex-1 min-h-0 flex-col justify-between overflow-hidden rounded-[1.5rem] sm:rounded-[1.75rem] border border-border/60 bg-card p-6 sm:p-7 text-card-foreground shadow-[0_20px_40px_rgba(var(--black-rgb),0.35)] transition-transform duration-500 ease-out hover:-translate-y-1.5"
     >
       <div>
         <h3 className="max-w-[16ch] font-heading text-xl sm:text-2xl leading-[1.15] tracking-tight text-card-foreground">

@@ -4,7 +4,6 @@ import { PlatformSection } from "@/components/landing/PlatformSection";
 import { AiEngineSection } from "@/components/landing/AiEngineSection";
 import { TradingModesSection } from "@/components/landing/TradingModesSection";
 import { EnginesShowcaseSection } from "@/components/landing/EnginesShowcaseSection";
-import { SecureFlowSection } from "@/components/landing/secure-flow/SecureFlowSection";
 import { SecurityArchitectureSection } from "@/components/landing/SecurityArchitectureSection";
 import { HowItWorksSection } from "@/components/landing/HowItWorksSection";
 import { FaqSection } from "@/components/landing/FaqSection";
@@ -25,7 +24,6 @@ export default function Home() {
         <AiEngineSection />
         <TradingModesSection />
         <EnginesShowcaseSection />
-        {/* <SecureFlowSection /> */}
         <SecurityArchitectureSection />
         <HowItWorksSection />
         <FaqSection />

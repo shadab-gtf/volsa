@@ -53,7 +53,7 @@ export function SecurityArchitectureSection() {
 
 function PillarCard({ pillar }: { pillar: SecurityPillar }) {
   return (
-    <article className="pillar-reveal group relative flex flex-col overflow-hidden rounded-[1.75rem] border border-border/60 bg-card p-7 text-card-foreground shadow-[0_20px_40px_rgba(var(--black-rgb),0.12)] transition-transform duration-500 ease-out will-change-transform hover:-translate-y-1.5">
+    <article className="pillar-reveal group relative flex flex-col overflow-hidden rounded-[1.75rem] border border-border/60 bg-card p-7 text-card-foreground shadow-[0_20px_40px_rgba(var(--black-rgb),0.12)] transition-transform duration-500 ease-out hover:-translate-y-1.5">
       <SecurityGlyph glyph={pillar.glyph} />
       <h3 className="mt-7 font-heading text-xl leading-snug tracking-tight text-card-foreground sm:text-2xl">
         {pillar.title}

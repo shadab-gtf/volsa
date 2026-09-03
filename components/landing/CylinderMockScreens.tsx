@@ -39,7 +39,7 @@ function MockScreenShell({
     <div
       className={`relative flex h-full w-full flex-col ${HANDOFF_CARD_RADIUS_CLASS} ${
         isFront ? HANDOFF_CARD_SHELL_FRONT_CLASS : HANDOFF_CARD_SHELL_CLASS
-      } ${overflowVisible ? "" : "overflow-hidden"} p-6 will-change-transform sm:p-7`}
+      } ${overflowVisible ? "" : "overflow-hidden"} p-6 sm:p-7`}
       style={opacity === undefined ? undefined : { opacity }}
     >
       {children}

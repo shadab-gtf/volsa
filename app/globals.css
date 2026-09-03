@@ -49,6 +49,11 @@
   --signal-up-soft: var(--brand-leaf);
   --signal-down: #b3350f;
   --signal-down-soft: #e0a68d;
+  /* The same "down" hue solved for the opposite constraint: --signal-down is dark so
+     it can carry white text on a light card, which leaves it nearly unreadable as
+     text on black. This is its dark-ground twin — used only where the ground is the
+     near-black of a panel or the WebGL stage, never on the light theme's cards. */
+  --signal-down-bright: #ff4d3d;
   --signal-flat: #8a6508;
   --signal-flat-soft: #d9c384;
 
@@ -56,6 +61,7 @@
      Keep every triplet in sync with its hex twin above. */
   --brand-forest-rgb: 34, 72, 11;
   --brand-leaf-rgb: 192, 252, 1;
+  --brand-lime-rgb: 206, 226, 139;
   --brand-dark-rgb: 18, 40, 5;
   --surface-rgb: 247, 253, 244;
   --white-rgb: 255, 255, 255;
@@ -194,23 +200,31 @@
   /* Hero's three drifting glow blobs, as whole gradients so the dark theme
      can drop two of them entirely rather than just recoloring — one clean
      glow reads as intentional, three overlapping ones reads as haze. */
+  /*
+   * All three on one colour: --brand-lime. It is far paler than the leaf/glow/forest
+   * mix it replaces, and the wash above it (--hero-veil, up to 0.46 white) eats pale
+   * tints — an earlier pass at this colour vanished into the background for exactly
+   * that reason. So the alphas are lifted well above the old values to compensate.
+   * They are tuned against the veil, not read as absolute strengths: 0.85 here lands
+   * roughly where 0.55 of the much stronger leaf did.
+   */
   --hero-blob-1: radial-gradient(
     circle,
-    rgba(var(--brand-leaf-rgb), 0.55) 0%,
-    rgba(var(--brand-leaf-rgb), 0.22) 42%,
-    rgba(var(--brand-leaf-rgb), 0) 70%
+    rgba(var(--brand-lime-rgb), 0.85) 0%,
+    rgba(var(--brand-lime-rgb), 0.36) 42%,
+    rgba(var(--brand-lime-rgb), 0) 70%
   );
   --hero-blob-2: radial-gradient(
     circle,
-    rgba(var(--brand-glow-soft-rgb), 0.6) 0%,
-    rgba(var(--brand-glow-rgb), 0.26) 45%,
-    rgba(var(--brand-glow-rgb), 0) 70%
+    rgba(var(--brand-lime-rgb), 0.78) 0%,
+    rgba(var(--brand-lime-rgb), 0.32) 45%,
+    rgba(var(--brand-lime-rgb), 0) 70%
   );
   --hero-blob-3: radial-gradient(
     circle,
-    rgba(var(--brand-forest-rgb), 0.34) 0%,
-    rgba(var(--brand-forest-rgb), 0.12) 45%,
-    rgba(var(--brand-forest-rgb), 0) 70%
+    rgba(var(--brand-lime-rgb), 0.6) 0%,
+    rgba(var(--brand-lime-rgb), 0.22) 45%,
+    rgba(var(--brand-lime-rgb), 0) 70%
   );
 
   --cta-gradient: linear-gradient(
@@ -248,6 +262,7 @@
   --color-signal-up-soft: var(--signal-up-soft);
   --color-signal-down: var(--signal-down);
   --color-signal-down-soft: var(--signal-down-soft);
+  --color-signal-down-bright: var(--signal-down-bright);
   --color-signal-flat: var(--signal-flat);
   --color-signal-flat-soft: var(--signal-flat-soft);
 
@@ -443,7 +458,14 @@
   --footer-neutral-800: #e5e7eb;
   --footer-neutral-900: #f3f4f6;
 }
+.hero-blob {
+  border-radius: 9999px;
+ filter: blur(200px);
 
+  animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1);
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
 /* Hide scrollbars globally while preserving scroll functionality */
 html,
 body {

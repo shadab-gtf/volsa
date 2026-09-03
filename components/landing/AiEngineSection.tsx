@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -74,6 +74,18 @@ export function AiEngineSection() {
   const stage = useRef<HTMLDivElement>(null);
   const driver = useRef(0);
 
+  /**
+   * Which way the skip button points. The section pins for several viewport-heights,
+   * so someone arriving from below is just as stuck as someone arriving from above —
+   * the escape hatch has to face whichever way they were already travelling.
+   *
+   * Mirrored into a ref so the scroll callback can compare without reading state, and
+   * only lifted into React when it actually flips, which is rare — a re-render per
+   * scroll frame here would be far more expensive than the button is worth.
+   */
+  const [skipUp, setSkipUp] = useState(false);
+  const skipUpRef = useRef(false);
+
   useEffect(() => {
     const root = stage.current;
     if (!root) return;
@@ -95,6 +107,13 @@ export function AiEngineSection() {
           pin: true,
           scrub: 1.0,
           invalidateOnRefresh: true,
+          onUpdate: (self) => {
+            const up = self.direction === -1;
+            if (up !== skipUpRef.current) {
+              skipUpRef.current = up;
+              setSkipUp(up);
+            }
+          },
         },
       });
 
@@ -143,20 +162,25 @@ export function AiEngineSection() {
         }
       });
 
-      // Nothing left to skip past by the time the last beat lands — the
-      // button fades out over the same window the last wipe uses.
-      tl.to(".skip-btn", { opacity: 0, duration: WIPE }, BEATS - WIPE);
+      // The button used to fade out on the last beat, on the reasoning that there was
+      // nothing left to skip past. That only held while it pointed one way: at the tail
+      // of the pin, someone scrolling up still has the whole section ahead of them, and
+      // a hidden button is exactly the wrong answer there. It stays for the full pin.
     }, root);
 
     return () => ctx.revert();
   }, []);
+
+  // Skipping "onward" means past whichever end you are heading for: the section after
+  // this one going down, the section before it going up.
+  const skipTarget = skipUp ? SECTION_IDS.platform : SECTION_IDS.tradingModes;
 
   // A longer glide than the navbar's own anchor jumps: this section can pin
   // for several viewport-heights of scroll, and the default 1.1s duration
   // that feels right for a short nav hop would read as a hard snap here.
   function handleSkip(event: React.MouseEvent<HTMLAnchorElement>) {
     event.preventDefault();
-    scrollToTarget(`#${SECTION_IDS.tradingModes}`, { duration: 1.8 });
+    scrollToTarget(`#${skipTarget}`, { duration: 1.8 });
   }
 
   return (
@@ -186,16 +210,20 @@ export function AiEngineSection() {
       <div ref={stage} className="ai-stage relative h-svh w-full overflow-hidden">
         <AmbientField />
 
-        {/* Skips the scroll-jack entirely — jumps straight to the next section. */}
+        {/* Skips the scroll-jack entirely — jumps straight out of the section, in
+            whichever direction the reader was already scrolling. */}
         <a
-          href={`#${SECTION_IDS.tradingModes}`}
+          href={`#${skipTarget}`}
           onClick={handleSkip}
+          aria-label={skipUp ? "Skip back to previous section" : "Skip to next section"}
           className="skip-btn group pointer-events-auto absolute right-6 top-24 z-30 flex items-center gap-2 border-b border-foreground/25 pb-1 font-sans text-[10px] font-bold uppercase tracking-[0.24em] text-foreground/50 transition-colors duration-300 hover:border-foreground/60 hover:text-foreground/90 sm:right-10 sm:top-28 lg:right-14 xl:right-16"
         >
           Skip
           <svg
             viewBox="0 0 16 16"
-            className="h-3 w-3 transition-transform duration-300 group-hover:translate-y-0.5"
+            className={`h-3 w-3 transition-transform duration-300 ${
+              skipUp ? "rotate-180 group-hover:-translate-y-0.5" : "group-hover:translate-y-0.5"
+            }`}
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"

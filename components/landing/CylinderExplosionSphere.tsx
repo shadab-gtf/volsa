@@ -13,10 +13,11 @@ interface CylinderExplosionSphereProps {
 }
 
 /** Brand palette — mirrors the tokens declared in app/globals.css. One hue only:
- *  every grain is a lightness step between `dark` and `leaf`, never a different hue. */
+ *  every grain is `leaf` scaled to a different brightness, never a different hue.
+ *  There is deliberately no dark end to blend toward: mixing toward --brand-dark
+ *  desaturates through the middle of the ramp and reads as muddy green. */
 const BRAND = {
   leaf: THEME_COLORS.brandLeaf,
-  dark: THEME_COLORS.brandDark,
 } as const;
 
 // ─── Scene constants ────────────────────────────────────────────────────────────
@@ -52,21 +53,112 @@ const RAD = Math.PI / 180;
 const ACTIVE_THRESHOLD = 0.001;
 
 /**
- * Markers cycled while the globe holds — content pulled straight from the product
- * spec's alert/signal vocabulary (§7 AI Signals, §30 Alerts & Notifications), placed at
- * plausible city locations the way a real "live activity" globe scatters its markers.
+ * Trading signals cycled while the globe holds — AI signals across major trading hubs.
+ * Each marker shows a signal type (BUY, SELL, ACCUMULATION, WATCHLIST), the asset,
+ * and live price action.
  */
 const MARKERS = [
-  { lat: 40.7, lon: -74.0, title: "BUY signal", meta: "BTC · momentum", color: THEME_COLORS.signalUp },
-  { lat: 51.5, lon: -0.12, title: "Trade executed", meta: "BSC · confirmed", color: THEME_COLORS.brandLeaf },
-  { lat: 35.7, lon: 139.7, title: "Take-profit triggered", meta: "+12.4%", color: THEME_COLORS.signalUp },
-  { lat: 1.35, lon: 103.8, title: "Deposit confirmed", meta: "BEP-20 · ~12s", color: THEME_COLORS.brandLeaf },
-  { lat: -33.9, lon: 151.2, title: "Swap completed", meta: "USDT → BNB", color: THEME_COLORS.brandGlow },
-  { lat: 25.2, lon: 55.3, title: "Cross-chain transfer", meta: "BSC ⇄ Solana", color: THEME_COLORS.brandLeaf },
-  { lat: -23.5, lon: -46.6, title: "SELL signal", meta: "Risk contained", color: THEME_COLORS.signalDown },
-  { lat: 19.4, lon: -99.1, title: "Withdrawal confirmed", meta: "~12s settle", color: THEME_COLORS.brandLeaf },
+  { lat: 40.7, lon: -74.0, signal: "BUY SIGNAL", asset: "BTC", icon: "bull", note: "Momentum", price: "$63,452.78", change: "2.48%", up: true, color: THEME_COLORS.brandLeaf },
+  { lat: 51.5, lon: -0.12, signal: "BUY SIGNAL", asset: "SOL", note: "Breakout", price: "$148.23", change: "3.26%", up: true, color: THEME_COLORS.brandLeaf },
+  { lat: 35.7, lon: 139.7, signal: "ACCUMULATION", asset: "BNB", note: "Long Term", price: "$592.11", change: "0.89%", up: true, color: THEME_COLORS.brandLeaf },
+  { lat: 1.35, lon: 103.8, signal: "BUY SIGNAL", asset: "ETH", note: "Momentum", price: "$2,451.12", change: "1.37%", up: true, color: THEME_COLORS.brandLeaf },
+  { lat: -33.9, lon: 151.2, signal: "SELL SIGNAL", asset: "ETH", icon: "bear", note: "Overbought", price: "$2,451.12", change: "1.37%", up: false, color: THEME_COLORS.signalDownBright },
+  { lat: 25.2, lon: 55.3, signal: "WATCHLIST", asset: "DOGE", note: "Volatile", price: "$0.1247", change: "0.66%", up: true, color: THEME_COLORS.brandLeaf },
+  { lat: -23.5, lon: -46.6, signal: "BUY SIGNAL", asset: "XRP", note: "Momentum", price: "$0.6124", change: "1.19%", up: true, color: THEME_COLORS.brandLeaf },
+  { lat: 19.4, lon: -99.1, signal: "ACCUMULATION", asset: "ADA", note: "Bullish", price: "$0.89", change: "2.15%", up: true, color: THEME_COLORS.brandLeaf },
 ];
-const MARKER_CYCLE_MS = 2400;
+const MARKER_CYCLE_MS = 3000;
+
+/** Card placement relative to its dot, and the length of the horizontal run where the
+ *  connector meets the card. The card is pushed away from the globe's center, so it
+ *  never sits over the sphere it is annotating. */
+const LABEL_GAP_X = 82;
+const LABEL_GAP_Y = 54;
+const LABEL_ELBOW = 18;
+/** Keep-out margin from the viewport edges. */
+const LABEL_INSET = 14;
+
+/**
+ * Asset marks for the signal cards. Drawn as paths rather than pulled from an icon
+ * package: six glyphs at 14px do not justify a dependency, and `currentColor` lets
+ * each one inherit its card's signal color for free.
+ */
+function AssetGlyph({ asset }: { asset: string }) {
+  const common = { width: 14, height: 14, viewBox: "0 0 24 24", "aria-hidden": true } as const;
+  switch (asset) {
+    // Market-direction marks rather than asset logos, for the two cards that carry
+    // them in the reference. Selected per marker via its `icon` override.
+    case "bull":
+      return (
+        <svg {...common}>
+          <path
+            d="M3.4 6.2c2.5-.5 4.6.5 5.8 2.4M20.6 6.2c-2.5-.5-4.6.5-5.8 2.4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.9}
+            strokeLinecap="round"
+          />
+          <path
+            d="M8.6 8.8h6.8c1.2 0 2.1.9 2.1 2.1v2.2a5.5 5.5 0 0 1-11 0v-2.2c0-1.2.9-2.1 2.1-2.1Z"
+            fill="currentColor"
+          />
+        </svg>
+      );
+    case "bear":
+      return (
+        <svg {...common} fill="currentColor">
+          <circle cx="6.7" cy="7.2" r="2.7" />
+          <circle cx="17.3" cy="7.2" r="2.7" />
+          <path d="M12 6.4a6.6 6.6 0 0 1 6.6 6.6v.4a6.6 6.6 0 1 1-13.2 0V13A6.6 6.6 0 0 1 12 6.4Z" />
+        </svg>
+      );
+    case "SOL":
+      return (
+        <svg {...common} fill="currentColor">
+          <path d="M6 5.2h11.4a.6.6 0 0 1 .43 1.02l-2.3 2.3a.9.9 0 0 1-.63.26H3.5a.6.6 0 0 1-.43-1.02l2.3-2.3a.9.9 0 0 1 .63-.26Z" />
+          <path d="M3.5 10.4h11.4a.9.9 0 0 1 .63.26l2.3 2.3a.6.6 0 0 1-.43 1.02H6a.9.9 0 0 1-.63-.26l-2.3-2.3a.6.6 0 0 1 .43-1.02Z" />
+          <path d="M6 15.6h11.4a.6.6 0 0 1 .43 1.02l-2.3 2.3a.9.9 0 0 1-.63.26H3.5a.6.6 0 0 1-.43-1.02l2.3-2.3a.9.9 0 0 1 .63-.26Z" />
+        </svg>
+      );
+    case "BNB":
+      return (
+        <svg {...common} fill="currentColor">
+          <path d="M12 2.4 15.1 5.5 12 8.6 8.9 5.5ZM6.3 8.1 9.4 11.2 6.3 14.3 3.2 11.2ZM17.7 8.1 20.8 11.2 17.7 14.3 14.6 11.2ZM12 13.8 15.1 16.9 12 20 8.9 16.9ZM12 8.1 15.1 11.2 12 14.3 8.9 11.2Z" />
+        </svg>
+      );
+    case "XRP":
+      return (
+        <svg {...common} fill="none" stroke="currentColor" strokeWidth={2.1} strokeLinecap="round">
+          <path d="M5.5 4.8c0 3.2 2.9 4.6 6.5 7.2 3.6 2.6 6.5 4 6.5 7.2M18.5 4.8c0 3.2-2.9 4.6-6.5 7.2-3.6 2.6-6.5 4-6.5 7.2" />
+        </svg>
+      );
+    case "ETH":
+      return (
+        <svg {...common} fill="currentColor">
+          <path d="M12 2 18.7 12.1 12 15.9 5.3 12.1ZM12 17.4 18.7 13.6 12 22 5.3 13.6Z" />
+        </svg>
+      );
+    case "ADA":
+      return (
+        <svg {...common} fill="currentColor">
+          <circle cx="12" cy="4.4" r="1.5" />
+          <circle cx="12" cy="19.6" r="1.5" />
+          <circle cx="5.4" cy="8.2" r="1.5" />
+          <circle cx="18.6" cy="8.2" r="1.5" />
+          <circle cx="5.4" cy="15.8" r="1.5" />
+          <circle cx="18.6" cy="15.8" r="1.5" />
+          <circle cx="12" cy="12" r="2.4" />
+        </svg>
+      );
+    // BTC and DOGE are letterform logos — the glyphs themselves, not drawings of them.
+    default:
+      return (
+        <span className="text-[13px] font-bold leading-none" aria-hidden>
+          {asset === "DOGE" ? "Ð" : "₿"}
+        </span>
+      );
+  }
+}
 
 function latLonToVec3(lat: number, lon: number, r: number, out = new THREE.Vector3()) {
   const phi = (90 - lat) * RAD;
@@ -261,6 +353,8 @@ export function CylinderExplosionSphere({
 }: CylinderExplosionSphereProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
+  const connectorRef = useRef<SVGSVGElement>(null);
+  const polylineRef = useRef<SVGPolylineElement>(null);
   const progressRef = useRef(0);
   const activeMarkerRef = useRef(0);
   const [activeMarker, setActiveMarker] = useState(0);
@@ -296,8 +390,14 @@ export function CylinderExplosionSphere({
     camera.position.set(0, 0, CAM_Z);
 
     const renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      // No MSAA: every grain is a soft-edged sprite whose falloff comes from the
+      // radial-gradient texture below, not from a geometry edge, so there is nothing
+      // for multisampling to smooth — it would only cost fill rate, multiplied by the
+      // pixel ratio. The other two particle scenes on this site already run without it.
+      antialias: false,
       alpha: true,
+      // Nothing here clips or masks, so the stencil buffer is dead allocation.
+      stencil: false,
       powerPreference: "high-performance",
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -343,7 +443,6 @@ export function CylinderExplosionSphere({
     const colDust = new Float32Array(COUNT * 3);
 
     const cLeaf = new THREE.Color(activeColor);
-    const cDark = new THREE.Color(BRAND.dark);
     const tmp = new THREE.Color();
 
     // Fake key light. Baking a lambert term per particle is what makes a point cloud
@@ -396,11 +495,21 @@ export function CylinderExplosionSphere({
       dunePos[idx + 1] = DUNE_BASE + h - depth;
       dunePos[idx + 2] = dz;
 
-      // ── Globe palette: land dots lit brand-leaf (lambert-shaded, same as the old
-      //    flat sphere), ocean dots pushed toward black so they read as invisible
-      //    against the backdrop. Colour-masked, not filtered out — every particle,
-      //    ocean included, still explodes into the dune field exactly as before, so the
-      //    dune field is exactly as dense as it always was. ──
+      // ── Globe palette: every dot is brand-leaf at a different brightness. Land is
+      //    lambert-shaded bright; ocean sits far down the same ramp, dim enough to
+      //    recede but still present, so the dots between the continents describe the
+      //    sphere's volume instead of vanishing into the backdrop.
+      //
+      //    Brightness is a straight multiply, never a lerp toward --brand-dark: mixing
+      //    two hues desaturates through the middle, which is what turned the unlit
+      //    hemisphere muddy dark-green. Scaling instead keeps #c0fc01 pure at every
+      //    light level. Colour management is on (three's default), so these operate in
+      //    linear space and land perceptually far brighter than the numbers suggest —
+      //    a 0.30 factor reads at roughly 58% on screen.
+      //
+      //    Colour-masked, not filtered out — every particle, ocean included, still
+      //    explodes into the dune field exactly as before, so the dune field is
+      //    exactly as dense as it always was. ──
       const lat = Math.asin(ny) / RAD;
       const lonRaw = Math.atan2(nz, -nx) / RAD - 180;
       // JS's `%` keeps the dividend's sign, so the extra +360 is what actually wraps
@@ -409,10 +518,9 @@ export function CylinderExplosionSphere({
       const lambert = Math.max(0, (nx * LX + ny * LY + nz * LZ) / LLEN);
 
       if (isLand(lon, lat)) {
-        const shade = 0.4 + Math.pow(lambert, 0.75) * 0.6;
-        tmp.copy(cDark).lerp(cLeaf, clamp01(shade));
+        tmp.copy(cLeaf).multiplyScalar(0.3 + Math.pow(lambert, 0.7) * 0.7);
       } else {
-        tmp.copy(cDark).multiplyScalar(0.05 + lambert * 0.05);
+        tmp.copy(cLeaf).multiplyScalar(0.035 + lambert * 0.075);
       }
       colSphere[idx] = tmp.r;
       colSphere[idx + 1] = tmp.g;
@@ -423,7 +531,10 @@ export function CylinderExplosionSphere({
       const lit = clamp01(0.52 - slope * 0.055);
       const crest = clamp01((h + 22) / 44);
       const sand = clamp01(crest * 0.55 + lit * 0.6 - depth * 0.05);
-      tmp.copy(cDark).lerp(cLeaf, clamp01(sand));
+      // Scaled, not lerped from --brand-dark, for the same reason as the globe above.
+      // The factors are picked to land on the old brightness range, so the dune field
+      // reads exactly as it did — only the desaturated middle of the ramp is gone.
+      tmp.copy(cLeaf).multiplyScalar(0.04 + sand * 0.96);
       colSand[idx] = tmp.r;
       colSand[idx + 1] = tmp.g;
       colSand[idx + 2] = tmp.b;
@@ -437,10 +548,10 @@ export function CylinderExplosionSphere({
       colText[idx + 2] = tmp.b;
 
       // ── Dust palette: same hue, well down in value so it never competes ──
-      tmp.copy(cDark).lerp(cLeaf, 0.4);
-      colDust[idx] = tmp.r * 0.5;
-      colDust[idx + 1] = tmp.g * 0.5;
-      colDust[idx + 2] = tmp.b * 0.5;
+      tmp.copy(cLeaf).multiplyScalar(0.18);
+      colDust[idx] = tmp.r;
+      colDust[idx + 1] = tmp.g;
+      colDust[idx + 2] = tmp.b;
 
       colors[idx] = colSphere[idx];
       colors[idx + 1] = colSphere[idx + 1];
@@ -462,6 +573,12 @@ export function CylinderExplosionSphere({
     const markerMaterials: THREE.MeshBasicMaterial[] = [];
     const markerMeshes: THREE.Mesh[] = [];
     const markerAnchors: THREE.Vector3[] = MARKERS.map(() => new THREE.Vector3());
+
+    // Cached label box, refreshed only when the active marker changes — see the
+    // positioning block at the tail of the render loop.
+    let labelW = 0;
+    let labelH = 0;
+    let labelMeasuredFor = -1;
 
     MARKERS.forEach((m) => {
       const material = new THREE.MeshBasicMaterial({
@@ -634,9 +751,13 @@ export function CylinderExplosionSphere({
       if (progress < ACTIVE_THRESHOLD) {
         if (material.opacity !== 0) {
           material.opacity = 0;
+          // Markers are separate meshes with their own opacity — they have to be taken
+          // down here too, or they hang in an otherwise empty stage.
+          for (let m = 0; m < MARKERS.length; m++) markerMeshes[m].visible = false;
           renderer.render(scene, camera);
         }
         if (labelRef.current) labelRef.current.style.opacity = "0";
+        if (connectorRef.current) connectorRef.current.style.opacity = "0";
         return;
       }
 
@@ -840,15 +961,55 @@ export function CylinderExplosionSphere({
       // costs a re-render. Done after render() so `globeGroup.matrixWorld` — updated
       // internally by render() — reflects this frame's rotation, not last frame's.
       const label = labelRef.current;
-      if (label) {
+      const connector = connectorRef.current;
+      const polyline = polylineRef.current;
+      if (label && connector && polyline) {
         if (markerVisibility > 0.01) {
           const anchor = markerAnchors[activeMarkerRef.current];
           projected.copy(anchor).applyMatrix4(globeGroup.matrixWorld).project(camera);
           const front = projected.z < 1;
-          label.style.transform = `translate(-50%, -160%) translate(${((projected.x + 1) / 2) * width}px, ${((1 - projected.y) / 2) * height}px)`;
-          label.style.opacity = front ? String(markerVisibility) : "0";
+
+          // Card size only changes when the active marker does, so measure on that edge
+          // instead of every frame — offsetWidth forces a synchronous layout.
+          if (labelMeasuredFor !== activeMarkerRef.current) {
+            labelW = label.offsetWidth;
+            labelH = label.offsetHeight;
+            labelMeasuredFor = activeMarkerRef.current;
+          }
+
+          const dotX = ((projected.x + 1) / 2) * width;
+          const dotY = ((1 - projected.y) / 2) * height;
+
+          // Push the card outward, away from the globe's center, so it annotates the
+          // sphere from outside rather than covering it. -1 puts the card left of the
+          // dot (its right edge is the attach point); +1 puts it right.
+          const side = dotX < width / 2 ? -1 : 1;
+
+          // The attach point is the midpoint of whichever card edge faces the dot.
+          // Clamped so the card's far edge still clears the viewport.
+          let attachX = dotX + side * LABEL_GAP_X;
+          attachX =
+            side < 0
+              ? Math.max(attachX, labelW + LABEL_INSET)
+              : Math.min(attachX, width - labelW - LABEL_INSET);
+          const halfH = labelH / 2;
+          const attachY = Math.min(
+            Math.max(dotY - LABEL_GAP_Y, halfH + LABEL_INSET),
+            Math.max(halfH + LABEL_INSET, height - halfH - LABEL_INSET)
+          );
+
+          label.style.transform = `translate(${attachX}px, ${attachY}px) translate(${side < 0 ? "-100%" : "0"}, -50%)`;
+
+          // Diagonal from the dot, then a short horizontal run into the card edge.
+          const elbowX = attachX - side * LABEL_ELBOW;
+          polyline.setAttribute("points", `${dotX},${dotY} ${elbowX},${attachY} ${attachX},${attachY}`);
+
+          const opacity = front ? String(markerVisibility) : "0";
+          label.style.opacity = opacity;
+          connector.style.opacity = opacity;
         } else {
           label.style.opacity = "0";
+          connector.style.opacity = "0";
         }
       }
     };
@@ -882,6 +1043,7 @@ export function CylinderExplosionSphere({
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      labelMeasuredFor = -1; // re-measure the card against the new viewport
 
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
@@ -925,16 +1087,55 @@ export function CylinderExplosionSphere({
       className="absolute inset-0 z-40 w-full h-full pointer-events-none overflow-hidden"
       aria-hidden="true"
     >
+      {/* Leader line from the dot to the card: a diagonal run, then a short horizontal
+          one into the card's edge. Its points are rewritten per frame alongside the
+          card's transform, so the elbow stays glued to both ends as the globe turns. */}
+      <svg ref={connectorRef} className="absolute inset-0 h-full w-full" style={{ opacity: 0 }} aria-hidden="true">
+        <polyline
+          ref={polylineRef}
+          points=""
+          fill="none"
+          stroke={marker.color}
+          strokeWidth={1}
+          strokeOpacity={0.55}
+          strokeLinejoin="round"
+        />
+      </svg>
+
       <div
         ref={labelRef}
-        className="pointer-events-none absolute left-0 top-0 flex items-center gap-2 whitespace-nowrap rounded-xl border border-white/15 bg-surface-panel-carousel/90 px-3 py-2 shadow-[0_12px_30px_rgba(var(--black-rgb),0.5)] will-change-transform"
-        style={{ opacity: 0 }}
+        className="pointer-events-none absolute left-0 top-0 whitespace-nowrap rounded-[10px] border bg-black px-3 py-2.5 font-sans will-change-transform"
+        style={{ opacity: 0, borderColor: `${marker.color}8c`, boxShadow: `0 0 20px ${marker.color}1f` }}
       >
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: marker.color }} />
-        <span className="font-sans">
-          <span className="block text-[11px] font-semibold text-white">{marker.title}</span>
-          <span className="block text-[9px] text-white/50">{marker.meta}</span>
-        </span>
+        <div className="flex items-center gap-2.5">
+          <span
+            className="grid h-7.5 w-7.5 shrink-0 place-items-center rounded-full border"
+            style={{ borderColor: `${marker.color}59`, backgroundColor: `${marker.color}14`, color: marker.color }}
+          >
+            <AssetGlyph asset={marker.icon ?? marker.asset} />
+          </span>
+          <span className="block">
+            {/* White title, not the signal color — the hue is carried by the border,
+                the mark and the change figure, so tinting the title too would make
+                every card read as one flat block of green. Sells stay red: that is
+                the one distinction a trader has to catch without reading. */}
+            <span
+              className="block text-[11px] font-semibold leading-none tracking-[0.06em]"
+              style={{ color: marker.up ? THEME_COLORS.white : marker.color }}
+            >
+              {marker.signal}
+            </span>
+            <span className="mt-1.5 block text-[9.5px] leading-none text-brand-slate">
+              {marker.asset} • {marker.note}
+            </span>
+          </span>
+        </div>
+        <div className="mt-2.5 flex items-baseline gap-2.5">
+          <span className="text-[12.5px] font-semibold leading-none text-white">{marker.price}</span>
+          <span className="text-[10px] font-semibold leading-none" style={{ color: marker.color }}>
+            {marker.up ? "▲" : "▼"} {marker.change}
+          </span>
+        </div>
       </div>
     </div>
   );

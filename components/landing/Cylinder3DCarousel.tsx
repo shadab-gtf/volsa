@@ -100,8 +100,13 @@ function renderCardContent(
  * each with its own header, controls and a cycling highlight while it's front-facing.
  * Every card shares one size and one shell, so the rotation reads as one continuous set
  * rather than six unrelated illustrations.
+ *
+ * Memoised at the bottom of this file for the same reason its children already are: the
+ * hero re-renders this on every scroll frame of a very long pin, and without the memo an
+ * unrelated state change up there (a hover flag, say) redoes all six cards' angle and
+ * opacity math for nothing.
  */
-export function Cylinder3DCarousel({
+function Cylinder3DCarouselImpl({
   features,
   cylinderRef,
   currentAngle = 0,
@@ -206,5 +211,7 @@ export function Cylinder3DCarousel({
     </div>
   );
 }
+
+export const Cylinder3DCarousel = React.memo(Cylinder3DCarouselImpl);
 
 export default Cylinder3DCarousel;
