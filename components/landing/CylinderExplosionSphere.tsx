@@ -5,6 +5,12 @@ import * as THREE from "three";
 import { THEME_COLORS } from "@/constants/theme-colors";
 import { TEXT_BEATS } from "./cylinderExplosion.data";
 import { isLand } from "./worldLandGrid";
+import {
+  cobeScaleForRadius,
+  createCobeGlobeShell,
+  type CobeGlobeShell,
+  type CobeProjection,
+} from "./cobeGlobeShell";
 
 interface CylinderExplosionSphereProps {
   /** 0 -> 1 slice of the pinned Features scroll that belongs to the particle stage. */
@@ -51,6 +57,25 @@ const RAD = Math.PI / 180;
 
 /** Below this the stage is doing nothing visible — see the render-loop bail below. */
 const ACTIVE_THRESHOLD = 0.001;
+
+/**
+ * The cobe -> grains handoff, both measured in `pDunes` (0 -> 1 across the blast).
+ *
+ * cobe draws the globe as a single full-screen shader, so it cannot itself come apart —
+ * which is why the shell and the grains are two objects rather than the one the rest of
+ * this stage is built around. They are matched to the same on-screen radius (see
+ * `cobeScale` below) and handed off inside the blast: the shell dissolves out over the
+ * first fifth of it while the grains bloom in over the first quarter, so the globe
+ * appears to granulate a beat before it bursts. Nothing after this point knows the
+ * shell existed — the dune field and every headline are the same buffer as always.
+ */
+const SHELL_DISSOLVE = 0.2;
+const GRAIN_BLOOM = 0.25;
+
+/** Marker dot radius as a share of the globe's radius. Carried over verbatim from the
+ *  Three.js marker meshes the shell's own dots replaced, which scaled to `sphereR *
+ *  0.018` — so the dots are exactly the size they have always been. */
+const MARKER_DOT_RADIUS = 0.018;
 
 /**
  * Trading signals cycled while the globe holds — AI signals across major trading hubs.
@@ -160,30 +185,26 @@ function AssetGlyph({ asset }: { asset: string }) {
   }
 }
 
-function latLonToVec3(lat: number, lon: number, r: number, out = new THREE.Vector3()) {
-  const phi = (90 - lat) * RAD;
-  const theta = (lon + 180) * RAD;
-  return out.set(-r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta));
-}
-
 /**
  * Timeline for the particle stage, expressed in `particleProgress` (0 -> 1) — the
  * tail slice of the pinned section's scroll. Single source of truth: HeroSection
  * imports this so nothing can drift out of sync with the WebGL beats.
  *
  * Beat sheet:
- *   0.00 - 0.05  the globe blooms in — same particle buffer as the rest of this
- *                component, just colored by real coastlines instead of a flat lambert
- *                ball (see the land/ocean palette below), with drag-to-rotate and
- *                marker popups. This is the whole point of the merge: there is no
- *                separate globe scene to crossfade from, so nothing to hand off
- *                awkwardly — the thing that explodes *is* the globe.
+ *   0.00 - 0.05  the globe blooms in — cobe's dotted world map (see cobeGlobeShell),
+ *                stepped from this component's own render loop at this component's own
+ *                orientation, with drag-to-rotate and marker popups. It is a shell
+ *                only: the particle buffer sits at zero opacity underneath it, sized to
+ *                the same on-screen radius, waiting for the blast.
  *   0.05 - 0.14  holds: idle-rotate, markers cycle, ready for the blast
- *   0.14 - 0.30  blast outward, gravity rakes it into a desert dune field (markers and
- *                the popup fade out over the first quarter of this)
+ *   0.14 - 0.30  blast outward, gravity rakes it into a desert dune field. The shell
+ *                dissolves into the grains over the first fifth of this (see
+ *                SHELL_DISSOLVE / GRAIN_BLOOM), taking the markers and the popup with
+ *                it; the grains carry the rest of the stage alone from here on.
  *   0.30 - 0.33  dune vista holds (camera lifts to a standing-in-the-desert view)
- *   0.33 - 0.93  four text beats — see TEXT_BEATS
- *   0.93 - 1.00  the closing headline simply holds
+ *   0.33 - 1.00  four text beats, evenly divided — see TEXT_BEATS. Every one explodes
+ *                identically: same scatter distance, same radial form, same camera
+ *                push, same morph and hold lengths. The last simply holds to the end.
  *
  * There is deliberately no fade-to-black exit. A pinned full-height section still has
  * to scroll its own screen away after the pin releases, so ending on emptiness buys a
@@ -341,11 +362,12 @@ function sampleText(
 /**
  * GPU-accelerated WebGL particle stage.
  *
- * The same particle buffer plays three roles in sequence: a dotted world-map globe
- * (real coastlines, drag-to-rotate, cycling signal markers), which blows apart into a
- * wind-carved desert dune field, which lifts into "IN YOUR CONTROL" and rebuilds
- * itself headline to headline before warping past the camera. Every timing lives in
- * PARTICLE_PHASES / TEXT_BEATS; the type is re-fitted to the viewport on every resize.
+ * A cobe globe shell (real coastlines, drag-to-rotate, cycling signal markers) blows
+ * apart into a wind-carved desert dune field, which lifts into "IN YOUR CONTROL" and
+ * rebuilds itself headline to headline before warping past the camera. One particle
+ * buffer plays every role after the shell, which it takes over from inside the blast.
+ * Every timing lives in PARTICLE_PHASES / TEXT_BEATS; the type is re-fitted to the
+ * viewport on every resize.
  */
 export function CylinderExplosionSphere({
   zoomProgress,
@@ -357,6 +379,11 @@ export function CylinderExplosionSphere({
   const polylineRef = useRef<SVGPolylineElement>(null);
   const progressRef = useRef(0);
   const activeMarkerRef = useRef(0);
+  /** Which dots are on the near side this frame, written by the render loop. cobe's
+   *  marker shader discards the far-side ones — unlike the depth-less meshes it
+   *  replaced, which showed through the sphere — so the cycle has to skip them or the
+   *  card would spend long stretches pointing at a dot that isn't drawn. */
+  const frontFacingRef = useRef<boolean[]>(MARKERS.map(() => true));
   const [activeMarker, setActiveMarker] = useState(0);
 
   useEffect(() => {
@@ -368,7 +395,20 @@ export function CylinderExplosionSphere({
   }, [activeMarker]);
 
   useEffect(() => {
-    const id = setInterval(() => setActiveMarker((i) => (i + 1) % MARKERS.length), MARKER_CYCLE_MS);
+    const id = setInterval(
+      () =>
+        setActiveMarker((i) => {
+          // Next dot on the near side, wrapping. Falls back to the plain next index if
+          // nothing is facing us — the globe is mid-tumble and any choice is as good.
+          const facing = frontFacingRef.current;
+          for (let step = 1; step <= MARKERS.length; step++) {
+            const next = (i + step) % MARKERS.length;
+            if (facing[next]) return next;
+          }
+          return (i + 1) % MARKERS.length;
+        }),
+      MARKER_CYCLE_MS
+    );
     return () => clearInterval(id);
   }, []);
 
@@ -382,8 +422,11 @@ export function CylinderExplosionSphere({
     const cores = navigator.hardwareConcurrency ?? 4;
     const COUNT = coarse || cores <= 4 ? GRAINS_LOW : GRAINS_HIGH;
 
-    const width = container.clientWidth;
-    const height = container.clientHeight;
+    // Mutable, and re-read on resize: the card's screen position and the shell's
+    // drawing buffer are both solved against these, so a stale pair parks the card off
+    // its dot for as long as the viewport stays at its new size.
+    let width = container.clientWidth;
+    let height = container.clientHeight;
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(FOV, width / height, 0.1, 1200);
@@ -564,15 +607,12 @@ export function CylinderExplosionSphere({
     let beatCache: (SampledText | null)[] = [];
     let idleHandle: number | null = null;
 
-    // ─── Globe group: the particle sphere plus its marker meshes, rotated together so
-    //     drag and idle-spin apply to both without tracking two transforms. ───
+    // ─── Globe group: the particle sphere on its own. The marker dots now ride cobe's
+    //     surface, so there is no second transform left to keep in step — but this
+    //     group's rotation is still the one orientation *both* spheres are drawn at,
+    //     which is what lets the drag handlers below stay exactly as they were. ───
     const globeGroup = new THREE.Group();
     scene.add(globeGroup);
-
-    const markerGeometry = new THREE.SphereGeometry(1, 10, 10);
-    const markerMaterials: THREE.MeshBasicMaterial[] = [];
-    const markerMeshes: THREE.Mesh[] = [];
-    const markerAnchors: THREE.Vector3[] = MARKERS.map(() => new THREE.Vector3());
 
     // Cached label box, refreshed only when the active marker changes — see the
     // positioning block at the tail of the render loop.
@@ -580,28 +620,40 @@ export function CylinderExplosionSphere({
     let labelH = 0;
     let labelMeasuredFor = -1;
 
-    MARKERS.forEach((m) => {
-      const material = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(m.color),
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-      });
-      const mesh = new THREE.Mesh(markerGeometry, material);
-      globeGroup.add(mesh);
-      markerMaterials.push(material);
-      markerMeshes.push(mesh);
-    });
+    /** Visible frustum height at the sphere's distance, in world units. */
+    const visibleHeight = () => 2 * Math.tan((FOV * Math.PI) / 360) * CAM_Z;
 
-    /** Re-anchors marker meshes to the current `sphereR` — called once up front and
-     *  again whenever `fitToViewport` re-solves the radius on resize. */
-    const repositionMarkers = () => {
-      MARKERS.forEach((m, i) => {
-        latLonToVec3(m.lat, m.lon, sphereR * 1.01, markerAnchors[i]);
-        markerMeshes[i].position.copy(markerAnchors[i]);
-        markerMeshes[i].scale.setScalar(sphereR * 0.018);
-      });
+    /** The particle sphere's radius for the current aspect. Solved eagerly on resize —
+     *  only the text fitting around it is expensive enough to want debouncing. */
+    const solveSphereR = () => {
+      const visH = visibleHeight();
+      return Math.min(visH * camera.aspect, visH) * SPHERE_FILL;
     };
+
+    /**
+     * cobe `scale` that puts the shell exactly on the particle sphere's silhouette.
+     *
+     * A perspective camera draws a sphere a little larger than its equator projects:
+     * the silhouette is the tangent circle, which lands at radius `r·d / √(d² − r²)` on
+     * the plane through the centre. cobe projects orthographically, so that widened
+     * radius is what the shell has to match — matching `sphereR` itself leaves the
+     * grains blooming in a few percent inside the shell they are taking over from,
+     * which reads as a step rather than a dissolve.
+     */
+    const cobeScale = () =>
+      cobeScaleForRadius(
+        (sphereR * CAM_Z) / Math.sqrt(CAM_Z * CAM_Z - sphereR * sphereR) / visibleHeight()
+      );
+
+    /**
+     * cobe's shell, built on the first frame it would actually be seen: it owns a WebGL
+     * context and compiles three programs, and none of that is worth paying for during
+     * the long cylinder phase ahead of this stage. Kept once built rather than torn
+     * down at the handoff — `setOpacity(0)` drops it out of the compositor and stops
+     * the draws, so scrubbing back up the page costs nothing and never recompiles.
+     */
+    let shell: CobeGlobeShell | null = null;
+    const shellDot: CobeProjection = { x: 0, y: 0, visible: false };
 
     /** Samples one headline, memoised. Cheap after the first call. */
     const ensureBeat = (i: number): SampledText => {
@@ -624,15 +676,13 @@ export function CylinderExplosionSphere({
       const visW = visH * camera.aspect;
       const narrow = camera.aspect < 1.15;
 
-      sphereR = Math.min(visW, visH) * SPHERE_FILL;
+      sphereR = solveSphereR();
       fit = {
         narrow,
         maxW: visW * (narrow ? 0.92 : 0.84),
         maxH: visH * 0.6,
         font: resolveHeadingFont(),
       };
-
-      repositionMarkers();
 
       beatCache = [];
       // Only the first headline is needed for a long while; let the browser fold the
@@ -727,7 +777,6 @@ export function CylinderExplosionSphere({
     let lastSand = -1;
     let lastText = -1;
     let lastBeat = -2;
-    const projected = new THREE.Vector3();
 
     const animate = () => {
       // Real delta keeps easing and drift identical on 60/120/144Hz displays.
@@ -749,13 +798,14 @@ export function CylinderExplosionSphere({
       // before the per-particle work, not after it.
       frame = requestAnimationFrame(animate);
       if (progress < ACTIVE_THRESHOLD) {
-        if (material.opacity !== 0) {
+        if (material.opacity !== 0 || points.visible) {
           material.opacity = 0;
-          // Markers are separate meshes with their own opacity — they have to be taken
-          // down here too, or they hang in an otherwise empty stage.
-          for (let m = 0; m < MARKERS.length; m++) markerMeshes[m].visible = false;
+          points.visible = false;
           renderer.render(scene, camera);
         }
+        // The shell is a sibling canvas rather than part of this scene, so it has to be
+        // taken down by hand or it hangs in an otherwise empty stage.
+        shell?.setOpacity(0);
         if (labelRef.current) labelRef.current.style.opacity = "0";
         if (connectorRef.current) connectorRef.current.style.opacity = "0";
         return;
@@ -790,12 +840,25 @@ export function CylinderExplosionSphere({
       const textBlend = beat > 0 ? 1 : beat === 0 ? morphT : 0;
       const sandBlend = pDunes * (1 - textBlend);
 
-      material.opacity = span(progress, PARTICLE_PHASES.globeIn);
+      // ── The handoff. Both spheres ride the same bloom-in, then trade places inside
+      //     the blast: the shell dissolves out, the grains bloom in behind it. Marker
+      //     dots and the signal card fade on the shell's curve, not the grains' — they
+      //     are drawn by the shell, so they have to leave with it. ──
+      const stageIn = span(progress, PARTICLE_PHASES.globeIn);
+      const shellOpacity = stageIn * (1 - easeInOutCubic(clamp01(pDunes / SHELL_DISSOLVE)));
+      material.opacity = stageIn * easeInOutCubic(clamp01(pDunes / GRAIN_BLOOM));
+      // Nothing to draw while the shell still has the globe to itself, and 55k grains
+      // at zero alpha are not free — the same reasoning as the bail above, one phase in.
+      const grainsLive = material.opacity > 0.001;
+      points.visible = grainsLive;
 
       // ── Camera: lifts into a standing-in-the-desert view, then pushes in through the
       //     closing beat's scatter and settles back as the headline locks. ──
       const vista = pDunes * (1 - textBlend);
-      const dive = beat === TEXT_BEATS.length - 1 ? Math.sin(morphT * Math.PI) : 0;
+      // The push fires on every beat now, not the closing one alone — the other half of
+      // making every explosion the same explosion (see TEXT_BEATS). It returns to CAM_Z
+      // by the end of each morph, so held type is always at its fitted size.
+      const dive = beat >= 0 ? Math.sin(morphT * Math.PI) : 0;
       camera.position.y = vista * 9;
       camera.position.z = CAM_Z + vista * 12 - dive * 62;
       camera.lookAt(0, vista * -7, 0);
@@ -820,7 +883,11 @@ export function CylinderExplosionSphere({
 
       const holding = beat >= 0 && dst !== null && morphT >= 1;
 
-      if (holding) {
+      if (!grainsLive) {
+        // Shell phase. The grains aren't drawn yet, so where they are doesn't matter —
+        // the first frame they bloom in runs the full integration below before drawing,
+        // and it starts them on the sphere exactly as it always did.
+      } else if (holding) {
         // ── Hold path: the headline is locked. Only shimmer and dust drift move, so
         //    skip the sphere, dune and morph maths entirely for the long readable beats.
         for (let i = 0; i < COUNT; i++) {
@@ -892,13 +959,15 @@ export function CylinderExplosionSphere({
             }
           }
 
-          // 3. Text beats. Beat 0 lifts off the sand on an updraft; later beats scatter
-          //    radially and re-converge, reading as the words rebuilding themselves.
+          // 3. Text beats. Every one scatters radially and re-converges, reading as the
+          //    words blowing apart and rebuilding themselves. The first used to lift off
+          //    the sand on an updraft instead of scattering; one shared form is what
+          //    makes the four changes read as one repeated gesture.
           if (beat >= 0 && dst) {
             const burst = Math.sin(morphT * Math.PI) * beatBurst * vel;
-            const bx = beat === 0 ? cp * burst * 0.7 : nx * burst;
-            const by = beat === 0 ? burst * 0.9 : ny * burst;
-            const bz = beat === 0 ? sp * burst * 0.7 : nz * burst;
+            const bx = nx * burst;
+            const by = ny * burst;
+            const bz = nz * burst;
 
             x = src[idx] + (dst[idx] - src[idx]) * morphT + bx;
             y = src[idx + 1] + (dst[idx + 1] - src[idx + 1]) * morphT + by;
@@ -916,13 +985,15 @@ export function CylinderExplosionSphere({
         }
       }
 
-      posAttr.needsUpdate = true;
+      if (grainsLive) posAttr.needsUpdate = true;
 
-      // Palette cross-fade, skipped entirely during the long holds.
+      // Palette cross-fade, skipped entirely during the long holds — and during the
+      // shell phase, which defers the one full-buffer pass to the frame it is needed.
       if (
-        beat !== lastBeat ||
-        Math.abs(sandBlend - lastSand) > 0.002 ||
-        Math.abs(textBlend - lastText) > 0.002
+        grainsLive &&
+        (beat !== lastBeat ||
+          Math.abs(sandBlend - lastSand) > 0.002 ||
+          Math.abs(textBlend - lastText) > 0.002)
       ) {
         for (let i = 0; i < COUNT; i++) {
           const idx = i * 3;
@@ -944,30 +1015,53 @@ export function CylinderExplosionSphere({
         lastBeat = beat;
       }
 
-      // Markers + popup: fade out over the first quarter of the blast, gone well
-      // before the dune field settles. Pulses gently while visible.
-      const markerVisibility = material.opacity * (1 - easeInOutCubic(clamp01(pDunes / 0.22)));
-      const pulse = 1 + Math.sin(time * 2.4) * 0.12;
-      for (let m = 0; m < MARKERS.length; m++) {
-        markerMaterials[m].opacity = markerVisibility;
-        markerMeshes[m].visible = markerVisibility > 0.01;
-        markerMeshes[m].scale.setScalar(sphereR * 0.018 * pulse);
+      // ── The shell, stepped at this frame's orientation: the very same
+      //     `globeGroup.rotation` the grains are drawn at, which is what holds the two
+      //     spheres on one axis through the dissolve however far the globe was dragged.
+      //     Dots pulse gently while visible, as they always have. The markers and the
+      //     popup belong to the shell now, so they leave on its curve. ──
+      const markerVisibility = shellOpacity;
+      if (markerVisibility > 0.001) {
+        if (!shell) {
+          shell = createCobeGlobeShell({
+            container,
+            markers: MARKERS,
+            dotRadius: MARKER_DOT_RADIUS,
+            width,
+            height,
+            scale: cobeScale(),
+            color: activeColor,
+          });
+        }
+        shell.setOpacity(markerVisibility);
+        shell.draw(globeGroup.rotation.y, globeGroup.rotation.x, 1 + Math.sin(time * 2.4) * 0.12);
+
+        // Which dots the cycle is allowed to pick next — see `frontFacingRef`.
+        const facing = frontFacingRef.current;
+        for (let m = 0; m < MARKERS.length; m++) {
+          shell.project(m, shellDot);
+          facing[m] = shellDot.visible;
+        }
+      } else {
+        shell?.setOpacity(0);
       }
 
       renderer.render(scene, camera);
 
       // Park the active marker's label on top of its projected screen position, read
       // straight off the DOM node rather than through React so a spinning globe never
-      // costs a re-render. Done after render() so `globeGroup.matrixWorld` — updated
-      // internally by render() — reflects this frame's rotation, not last frame's.
+      // costs a re-render. The position comes from the shell's own projection, at the
+      // orientation it was just drawn at, so this no longer depends on running after
+      // render() the way the Three.js marker anchors did.
       const label = labelRef.current;
       const connector = connectorRef.current;
       const polyline = polylineRef.current;
       if (label && connector && polyline) {
-        if (markerVisibility > 0.01) {
-          const anchor = markerAnchors[activeMarkerRef.current];
-          projected.copy(anchor).applyMatrix4(globeGroup.matrixWorld).project(camera);
-          const front = projected.z < 1;
+        if (markerVisibility > 0.01 && shell) {
+          shell.project(activeMarkerRef.current, shellDot);
+          // Genuinely near-side this time: cobe's marker shader discards the far-side
+          // dots, so a card pointing at one would be pointing at nothing.
+          const front = shellDot.visible;
 
           // Card size only changes when the active marker does, so measure on that edge
           // instead of every frame — offsetWidth forces a synchronous layout.
@@ -977,8 +1071,8 @@ export function CylinderExplosionSphere({
             labelMeasuredFor = activeMarkerRef.current;
           }
 
-          const dotX = ((projected.x + 1) / 2) * width;
-          const dotY = ((1 - projected.y) / 2) * height;
+          const dotX = shellDot.x;
+          const dotY = shellDot.y;
 
           // Push the card outward, away from the globe's center, so it annotates the
           // sphere from outside rather than covering it. -1 puts the card left of the
@@ -1038,12 +1132,18 @@ export function CylinderExplosionSphere({
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     const handleResize = () => {
       if (!containerRef.current) return;
-      const w = containerRef.current.clientWidth;
-      const h = containerRef.current.clientHeight;
-      camera.aspect = w / h;
+      width = containerRef.current.clientWidth;
+      height = containerRef.current.clientHeight;
+      camera.aspect = width / height;
       camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+      renderer.setSize(width, height);
       labelMeasuredFor = -1; // re-measure the card against the new viewport
+
+      // The radius solve is cheap, so it happens now rather than on the debounce — the
+      // shell has to be re-scaled against it in the same breath or it stretches with
+      // the canvas until the timer fires.
+      sphereR = solveSphereR();
+      shell?.resize(width, height, cobeScale());
 
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
@@ -1072,8 +1172,7 @@ export function CylinderExplosionSphere({
       geometry.dispose();
       material.dispose();
       particleTexture.dispose();
-      markerGeometry.dispose();
-      markerMaterials.forEach((m) => m.dispose());
+      shell?.destroy();
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
       renderer.dispose();
     };

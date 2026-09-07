@@ -8,6 +8,7 @@ import { SecurityArchitectureSection } from "@/components/landing/SecurityArchit
 import { HowItWorksSection } from "@/components/landing/HowItWorksSection";
 import { FaqSection } from "@/components/landing/FaqSection";
 import { CtaSection } from "@/components/landing/CtaSection";
+import { SeaSection } from "@/components/landing/SeaSection";
 import { FooterSection } from "@/components/landing/FooterSection";
 
 /**
@@ -28,6 +29,7 @@ export default function Home() {
         <HowItWorksSection />
         <FaqSection />
         <CtaSection />
+        <SeaSection />
       </main>
       <FooterSection />
     </>

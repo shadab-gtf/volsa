@@ -18,6 +18,7 @@ export const SECTION_IDS = {
   howItWorks: "how-it-works",
   faq: "faq",
   cta: "cta",
+  sea: "sea",
 
   // Legacy ids, still referenced by sections queued for replacement.
   engines: "engines",
