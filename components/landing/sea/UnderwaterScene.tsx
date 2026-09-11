@@ -9,9 +9,20 @@ import {
   MESSAGE_GAP,
   SEA_MESSAGES,
 } from "./seaMessages.data";
+import { createDiveStage, SUN_DIR, SURFACE_Y } from "./diveStage";
 
 /**
- * Underwater sea scene: one koi, swimming.
+ * A koi breaches from the water, follows a ballistic arc, and returns to the sea.
+ *
+ * Two stages sharing one camera and one fish. The descent is **scrubbed by scroll** and
+ * on rails: the koi clears the surface, the camera follows after impact, and the crossing is
+ * driven entirely by how deep the lens is — so scrolling back up runs the whole thing
+ * backwards, splash included. Everything after it is **live**: the koi steers, chases
+ * the lines in seaMessages.data, and comes to the cursor. See DIVE_END for where one
+ * hands over to the other, and solveDiveCurve for why the handover has no kink in it.
+ *
+ * The sky, the surface and the breach live in diveStage. There is no compositing seam at
+ * the waterline because sky and sea are the same dome with one crossfade uniform.
  *
  * Raw Three.js rather than React Three Fiber, like CylinderExplosionSphere and for the
  * same reasons — the whole thing is one imperative render loop with shader injection
@@ -51,6 +62,52 @@ const KOI_LENGTH = 1.7;
 const CAM_DIST = 5.2;
 const FOV = 42;
 const FOG_DENSITY = 0.105;
+/** Haze above the water. Nearly nothing — air is not water, and fog up there mostly
+ *  serves to keep the far end of the surface from ending in a hard line. */
+const FOG_DENSITY_AIR = 0.012;
+
+/**
+ * The dive, as a share of the section's scroll.
+ *
+ * Ends well before the section does: the rest is the koi underwater, which is where the
+ * messages and the cursor-following live and where a reader is expected to stop. The
+ * whole sequence is scrubbed rather than played, so scrolling back up runs it backwards
+ * — which is why the splash and the surface ripple are written as functions of position
+ * in the dive rather than as timers.
+ */
+const DIVE_END = 0.45;
+const DIVE_SECONDS = 5.6;
+const FLIGHT_START = 0.28;
+const FLIGHT_DURATION = 2;
+const FLIGHT_SPEED_Y = 6.05;
+const FLIGHT_GRAVITY = 5.8;
+const WATER_DRAG = 2;
+const SCROLL_RESPONSE = 8;
+/** Camera above the water at the start of the dive, and where it is looking. */
+const CAM_AIR = new THREE.Vector3(0, SURFACE_Y + 1.3, 8.8);
+const LOOK_AIR = new THREE.Vector3(0, SURFACE_Y + 1.65, 0);
+/**
+ * Launch and landing fit the visible width, including portrait screens. Gravity
+ * determines the airborne motion; a tangent-matched curve takes over underwater.
+ *
+ * The horizontal offsets are **fractions of the visible half-width at their own depth**,
+ * not world units, and that is not a detail. Written as world x, the entry point sat
+ * 105% of a frame off the left edge of a portrait phone — the koi simply was not in the
+ * picture for most of the dive. The same mistake the message slots made, and the same
+ * fix: place it in the frame and let the frame decide what that is in world units.
+ *
+ * The last two points are solved rather than written — see solveDiveCurve — so the curve
+ * arrives exactly where the idle path begins, pointing exactly the way the idle path
+ * leaves. That is what makes the handover from a scrubbed dive to a live swimmer
+ * invisible rather than a kink.
+ */
+const DIVE_ENTRY_X = -0.45;
+const DIVE_ENTRY_Y = SURFACE_Y - 1.45;
+const DIVE_ENTRY_Z = 0.45;
+const DIVE_EXIT_X = 0.38;
+/** How far back from the handover point the third control point sits. Longer means the
+ *  koi levels out more gradually as it comes out of the plunge. */
+const DIVE_TANGENT = 1.3;
 
 /**
  * The koi's own axes, measured off the asset rather than assumed.
@@ -111,8 +168,6 @@ const PATH_DEPTH = 0.35;
  * swimming, which is also what lets the message dissolve on contact rather than on a
  * timer that hopes the fish got there.
  */
-/** World units per second toward a message. The frame is about 4.5 units across at this
- *  camera, so this has to cover it inside MESSAGE_EVERY with room for the dissolve. */
 /**
  * World units per second toward a message — a flat, unhurried cruise.
  *
@@ -300,6 +355,7 @@ precision mediump float;
 varying vec2 vUv;
 uniform float uTime;
 uniform float uSeed;
+uniform float uFade;
 uniform vec3  uColor;
 void main() {
   // Brightest where it enters the water and fading as it goes down, with soft edges
@@ -308,28 +364,10 @@ void main() {
   float fade  = pow(clamp(vUv.y, 0.0, 1.0), 1.7);
   float edge  = smoothstep(0.0, 0.34, vUv.x) * (1.0 - smoothstep(0.66, 1.0, vUv.x));
   float pulse = 0.72 + 0.28 * sin(uTime * 0.55 + uSeed * 6.2831);
-  gl_FragColor = vec4(uColor, fade * edge * pulse * 0.13);
+  gl_FragColor = vec4(uColor, fade * edge * pulse * 0.13 * uFade);
 }
 `;
 
-const SURFACE_FRAG = /* glsl */ `
-precision mediump float;
-varying vec2 vUv;
-uniform float uTime;
-uniform vec3  uColor;
-float seaCaustic(vec2 p, float t) {
-  float a = sin(p.x * 3.1 + sin(p.y * 2.3 + t * 0.9) * 1.7);
-  float b = sin(p.y * 2.7 + sin(p.x * 1.9 - t * 0.7) * 1.5);
-  return pow(max(0.0, a * b), 3.0);
-}
-void main() {
-  vec2 p = vUv * 11.0;
-  float c = seaCaustic(p, uTime) + seaCaustic(p * 1.9 + 3.1, uTime * 1.25) * 0.5;
-  // Radial fade, so the plane's own edges never appear in frame.
-  float r = length(vUv - 0.5) * 2.0;
-  gl_FragColor = vec4(uColor, clamp(c, 0.0, 1.0) * (1.0 - smoothstep(0.5, 1.0, r)) * 0.5);
-}
-`;
 
 /** Soft round sprite for the particulate. A hard square reads as a pixel, not a mote. */
 function moteTexture(): THREE.CanvasTexture {
@@ -366,6 +404,22 @@ function toFloatAttribute(attr: THREE.BufferAttribute | THREE.InterleavedBufferA
   return new THREE.BufferAttribute(out, items);
 }
 
+function disposeLoadedModel(root: THREE.Object3D) {
+  const resources = new Set<{ dispose: () => void }>();
+  root.traverse((object) => {
+    if (!(object instanceof THREE.Mesh)) return;
+    resources.add(object.geometry);
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    for (const material of materials) {
+      resources.add(material);
+      for (const value of Object.values(material)) {
+        if (value instanceof THREE.Texture) resources.add(value);
+      }
+    }
+  });
+  for (const resource of resources) resource.dispose();
+}
+
 export function UnderwaterScene() {
   const containerRef = useRef<HTMLDivElement>(null);
   const msgRef = useRef<HTMLParagraphElement>(null);
@@ -390,24 +444,42 @@ export function UnderwaterScene() {
     let height = container.clientHeight;
 
     const scene = new THREE.Scene();
-    // Fog does the depth for us. Its colour matches the middle of the CSS water column
-    // behind the canvas, which is what lets a transparent canvas fade into a gradient.
-    scene.fog = new THREE.FogExp2(new THREE.Color(SEA.mid), FOG_DENSITY);
+    /**
+     * One fog object whose density and colour are re-driven each frame from how deep the
+     * camera is, rather than two fogs swapped at the waterline. Air is nearly clear;
+     * water is not. Crossing between them is a lerp on two numbers, which is why there
+     * is no moment where the atmosphere changes over.
+     */
+    const fog = new THREE.FogExp2(new THREE.Color(SEA.mid), FOG_DENSITY);
+    scene.fog = fog;
+    const airFog = new THREE.Color(0xbcd3e0);
+    const waterFog = new THREE.Color(SEA.mid);
 
-    const camera = new THREE.PerspectiveCamera(FOV, width / height, 0.1, 60);
-    camera.position.set(0, 0.35, CAM_DIST);
-    camera.lookAt(0, 0, 0);
+    /** Where the camera ends up once the dive is over — the framing this scene has
+     *  always used, and the anchor the descent eases into. */
+    const UNDERWATER_CAM = new THREE.Vector3(0, 0.35, CAM_DIST);
+    const UNDERWATER_LOOK = new THREE.Vector3(0, 0, 0);
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const renderer = new THREE.WebGLRenderer({
-      // Unlike the particle stages on this page, this scene has a solid mesh with a real
-      // silhouette, so its edges are worth smoothing. Only where it is affordable: at
-      // dpr 2 the extra samples buy almost nothing a person can see, and cost real fill.
-      antialias: dpr < 2,
-      alpha: true,
-      stencil: false,
-      powerPreference: "high-performance",
-    });
+    const camera = new THREE.PerspectiveCamera(FOV, width / height, 0.1, 90);
+    // Under reduced motion the dive is skipped outright — a scrubbed descent is exactly
+    // the kind of motion that setting exists to refuse — so the camera starts where the
+    // dive would have left it rather than stranded in the air with nothing to move it.
+    camera.position.copy(still ? UNDERWATER_CAM : CAM_AIR);
+    camera.lookAt(still ? UNDERWATER_LOOK : LOOK_AIR);
+
+    const dpr = Math.min(window.devicePixelRatio || 1, lowEnd ? 1.25 : 1.75);
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        antialias: !lowEnd,
+        alpha: true,
+        stencil: false,
+        powerPreference: "high-performance",
+      });
+    } catch {
+      setFailed(true);
+      return;
+    }
     renderer.setPixelRatio(dpr);
     renderer.setSize(width, height);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -418,39 +490,33 @@ export function UnderwaterScene() {
     //     to keep the shadowed flanks in water-coloured bounce rather than black. No
     //     shadow map: underwater shadows are diffuse to the point of absence, and it
     //     would be the single most expensive thing in the scene. ───
-    const sun = new THREE.DirectionalLight(new THREE.Color(SEA.sun), 2.1);
-    sun.position.set(-1.6, 4.2, 1.9);
+    // The key light sits where the dome draws the sun, so the disk in the sky, the
+    // glint on the swell and the lit side of the koi all agree about the light source.
+    const sunAir = new THREE.Color(0xfff4dc);
+    const sunWater = new THREE.Color(SEA.sun);
+    const sun = new THREE.DirectionalLight(sunAir.clone(), 3.1);
+    sun.position.copy(SUN_DIR).multiplyScalar(6);
     scene.add(sun);
     scene.add(
       new THREE.HemisphereLight(new THREE.Color(SEA.shallow), new THREE.Color(SEA.deep), 1.25)
     );
 
     const uTime = { value: 0 };
+    const uWaveAmp = { value: WAVE_AMP * KOI_LENGTH };
+    const uCausticGain = { value: 0 };
     const disposables: { dispose: () => void }[] = [];
 
-    // ─── The surface overhead, seen from underneath. ───
-    const surfaceGeo = new THREE.PlaneGeometry(30, 30);
-    const surfaceMat = new THREE.ShaderMaterial({
-      vertexShader: RAY_VERT,
-      fragmentShader: SURFACE_FRAG,
-      uniforms: { uTime, uColor: { value: new THREE.Color(SEA.sun) } },
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
-      fog: false,
-    });
-    const surface = new THREE.Mesh(surfaceGeo, surfaceMat);
-    surface.rotation.x = Math.PI / 2;
-    surface.position.y = 3.7;
-    scene.add(surface);
-    disposables.push(surfaceGeo, surfaceMat);
+    // The surface itself now belongs to diveStage, which draws it from both sides and
+    // displaces it — this scene used to own a flat one-sided plane, which was fine while
+    // the camera could only ever be underneath it.
 
     // ─── Light shafts. Additive quads rather than anything volumetric: a real
-    //     god-ray pass is a screen-space blur and this needs to stay cheap. ───
+    //     god-ray pass is a screen-space blur and this needs to stay cheap. They hang
+    //     from the surface, so they move with it rather than from a fixed height. ───
     const rayGeo = new THREE.PlaneGeometry(1, 1);
     disposables.push(rayGeo);
     const rays = new THREE.Group();
+    const rayMaterials: THREE.ShaderMaterial[] = [];
     const rayCount = lowEnd ? RAYS_LOW : RAYS_HIGH;
     for (let i = 0; i < rayCount; i++) {
       const mat = new THREE.ShaderMaterial({
@@ -460,6 +526,9 @@ export function UnderwaterScene() {
           uTime,
           uSeed: { value: i / rayCount },
           uColor: { value: new THREE.Color(SEA.sun) },
+          // Shafts are a thing you see from inside the water looking up. Above it there
+          // is nothing for the light to scatter through, so they fade out with depth.
+          uFade: { value: 0 },
         },
         transparent: true,
         depthWrite: false,
@@ -470,9 +539,10 @@ export function UnderwaterScene() {
       const ray = new THREE.Mesh(rayGeo, mat);
       const t = (i + 0.5) / rayCount;
       ray.scale.set(0.5 + (i % 3) * 0.35, 8.5, 1);
-      ray.position.set((t - 0.5) * 13, 1.4, -2.2 - (i % 4) * 1.5);
+      ray.position.set((t - 0.5) * 13, SURFACE_Y - 4.1, -2.2 - (i % 4) * 1.5);
       ray.rotation.z = (i % 2 ? 1 : -1) * (0.1 + (i % 3) * 0.06);
       rays.add(ray);
+      rayMaterials.push(mat);
       disposables.push(mat);
     }
     scene.add(rays);
@@ -519,7 +589,10 @@ export function UnderwaterScene() {
     loader.load(
       "/mesh/koi-fish.opt.glb",
       (gltf) => {
-        if (disposed) return;
+        if (disposed) {
+          disposeLoadedModel(gltf.scene);
+          return;
+        }
 
         let mesh: THREE.Mesh | null = null;
         gltf.scene.updateWorldMatrix(true, true);
@@ -527,6 +600,7 @@ export function UnderwaterScene() {
           if (!mesh && (o as THREE.Mesh).isMesh) mesh = o as THREE.Mesh;
         });
         if (!mesh) {
+          disposeLoadedModel(gltf.scene);
           setFailed(true);
           return;
         }
@@ -583,13 +657,13 @@ export function UnderwaterScene() {
 
         material.onBeforeCompile = (shader) => {
           shader.uniforms.uTime = uTime;
-          shader.uniforms.uWaveAmp = { value: WAVE_AMP * KOI_LENGTH };
+          shader.uniforms.uWaveAmp = uWaveAmp;
           shader.uniforms.uWaveK = { value: (Math.PI * 2) / (WAVE_LENGTH * KOI_LENGTH) };
           shader.uniforms.uWaveSpeed = { value: WAVE_SPEED };
           shader.uniforms.uTailRamp = { value: TAIL_RAMP };
           shader.uniforms.uBodyZ = { value: new THREE.Vector2(bodyMin, bodyMax) };
           shader.uniforms.uCausticColor = { value: new THREE.Color(SEA.caustic) };
-          shader.uniforms.uCausticGain = { value: 0.55 };
+          shader.uniforms.uCausticGain = uCausticGain;
 
           shader.vertexShader = shader.vertexShader
             .replace("#include <common>", `#include <common>\n${KOI_PRELUDE}`)
@@ -612,18 +686,21 @@ export function UnderwaterScene() {
         body.frustumCulled = false; // it is displaced past its own bounds by the wave
         koi.add(body);
         koiReady = true;
+        source.geometry.dispose();
 
         // The material and its three 1024 textures come from the loader, not from us,
         // so nothing else will release them — that is ~16 MB of GPU memory per mount if
         // this section is left to be torn down and rebuilt.
         disposables.push(geo, material);
-        for (const map of [material.map, material.normalMap, material.roughnessMap, material.metalnessMap]) {
-          if (map) disposables.push(map);
+        const textures = new Set<THREE.Texture>();
+        for (const value of Object.values(material)) {
+          if (value instanceof THREE.Texture) textures.add(value);
         }
+        disposables.push(...textures);
 
         // Reduced motion draws one frame and stops (see the loop), so the koi arriving
         // after that frame needs to ask for another.
-        if (still && !frame) frame = requestAnimationFrame(animate);
+        if (still && !frame && !document.hidden) frame = requestAnimationFrame(animate);
       },
       undefined,
       () => {
@@ -695,6 +772,102 @@ export function UnderwaterScene() {
     // Plane the messages and the cursor are both projected onto, so the koi only ever
     // has to swim in two dimensions and always arrives exactly where the text is.
     const swimPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -SWIM_PLANE_Z);
+
+    // Gravity controls the breach; water drag slows the return into the idle path.
+    const diveEnd = pathAt(0, new THREE.Vector3());
+    const diveEndDir = (() => {
+      const a = pathAt(0.001, new THREE.Vector3());
+      return a.sub(diveEnd).normalize();
+    })();
+    const diveP2 = diveEnd.clone().addScaledVector(diveEndDir, -DIVE_TANGENT);
+
+    const diveCurve = new THREE.CubicBezierCurve3(
+      new THREE.Vector3(),
+      new THREE.Vector3(),
+      diveP2,
+      diveEnd
+    );
+    const flightOrigin = new THREE.Vector3();
+    const flightVelocity = new THREE.Vector3();
+    const waterDuration = DIVE_SECONDS - FLIGHT_START - FLIGHT_DURATION;
+    const dragNormalization = 1 - Math.exp(-WATER_DRAG * waterDuration);
+    let breachAt = 2;
+    let launchAt = 0.4;
+    const impactPoint = new THREE.Vector3();
+    const launchPoint = new THREE.Vector3();
+    const probe = new THREE.Vector3();
+    const probeDirection = new THREE.Vector3();
+
+    const sampleDive = (seconds: number, point: THREE.Vector3, direction: THREE.Vector3) => {
+      const flightTime = Math.max(0, seconds - FLIGHT_START);
+      if (flightTime <= FLIGHT_DURATION) {
+        point.copy(flightOrigin).addScaledVector(flightVelocity, flightTime);
+        point.y -= 0.5 * FLIGHT_GRAVITY * flightTime * flightTime;
+        direction.copy(flightVelocity);
+        direction.y -= FLIGHT_GRAVITY * flightTime;
+        direction.normalize();
+        return;
+      }
+      const waterTime = Math.min(waterDuration, flightTime - FLIGHT_DURATION);
+      const u = (1 - Math.exp(-WATER_DRAG * waterTime)) / dragNormalization;
+      diveCurve.getPoint(u, point);
+      diveCurve.getTangent(u, direction);
+    };
+
+    const solveDiveCurve = () => {
+      const halfWidth = Math.min(
+        2.5,
+        (CAM_AIR.z - DIVE_ENTRY_Z) * Math.tan((FOV * Math.PI) / 360) * camera.aspect
+      );
+      flightOrigin.set(DIVE_ENTRY_X * halfWidth, DIVE_ENTRY_Y, DIVE_ENTRY_Z);
+      flightVelocity.set(
+        ((DIVE_EXIT_X - DIVE_ENTRY_X) * halfWidth) / FLIGHT_DURATION,
+        FLIGHT_SPEED_Y,
+        -0.25
+      );
+      sampleDive(FLIGHT_START + FLIGHT_DURATION, diveCurve.v0, probeDirection);
+      probeDirection.copy(flightVelocity);
+      probeDirection.y -= FLIGHT_GRAVITY * FLIGHT_DURATION;
+      // Match velocity at water entry while exponential drag eases the swimmer down.
+      diveCurve.v1.copy(diveCurve.v0).addScaledVector(
+        probeDirection,
+        dragNormalization / (3 * WATER_DRAG)
+      );
+
+      const noseY = (seconds: number) => {
+        sampleDive(seconds, probe, probeDirection);
+        return probe.y + probeDirection.y * KOI_LENGTH * 0.5 - SURFACE_Y;
+      };
+      const apex = FLIGHT_START + FLIGHT_SPEED_Y / FLIGHT_GRAVITY;
+      const crossing = (start: number, end: number, ascending: boolean, out: THREE.Vector3) => {
+        let lo = start;
+        let hi = end;
+        for (let i = 0; i < 28; i++) {
+          const mid = (lo + hi) / 2;
+          if ((noseY(mid) < 0) === ascending) lo = mid;
+          else hi = mid;
+        }
+        const seconds = (lo + hi) / 2;
+        sampleDive(seconds, out, probeDirection);
+        out.addScaledVector(probeDirection, KOI_LENGTH * 0.5);
+        out.y = SURFACE_Y;
+        return seconds;
+      };
+      launchAt = crossing(FLIGHT_START, apex, true, launchPoint);
+      breachAt = crossing(apex, FLIGHT_START + FLIGHT_DURATION, false, impactPoint);
+    };
+    solveDiveCurve();
+
+    const diveStage = createDiveStage({
+      water: { shallow: SEA.shallow, mid: SEA.mid, deep: SEA.deep },
+      lowEnd,
+    });
+    scene.add(diveStage.group);
+    disposables.push(diveStage);
+
+    const divePos = new THREE.Vector3();
+    const diveDir = new THREE.Vector3();
+    const camAim = new THREE.Vector3();
     // Seeded up front, not on the first frame: the message system runs before the koi
     // in the loop and picks its slot from where the koi is, so an unseeded origin would
     // put the very first line on whichever side a zero vector happens to project to.
@@ -758,27 +931,110 @@ export function UnderwaterScene() {
       msgW = node.offsetWidth;
       msgH = node.offsetHeight;
 
-      // Speed is set from the crossing it actually has to make, so arrival lands on the
-      // same beat whatever shape the viewport is. The slots sit at a fixed fraction of
-      // the frame, so a 21:9 monitor puts them 5.5 world units apart where a phone puts
-      // them 1.5 — a fixed cruise would still be crossing the wide one when the next
-      // message was already due, and the koi would never be seen to arrive.
       msgBorn = time;
       msgDissolveAt = Infinity;
       msgAlive = true;
     };
 
+    /**
+     * How far through the section the page has scrolled, 0 -> 1.
+     *
+     * Read off the outer `<section>` rather than off this canvas, because the canvas is
+     * stuck to the viewport and so never moves — its own rect says nothing about scroll
+     * position. One `getBoundingClientRect` per frame: nothing in this loop writes to
+     * layout, so the read never forces a synchronous reflow, and it saves owning a
+     * scroll subscription that would then have to be torn down.
+     */
+    const scrollHost = container.closest("section") ?? container;
+    const sectionProgress = () => {
+      const rect = scrollHost.getBoundingClientRect();
+      const travel = rect.height - (window.innerHeight || 1);
+      if (travel <= 0) return rect.top <= 0 ? 1 : 0;
+      return Math.min(1, Math.max(0, -rect.top / travel));
+    };
+
     const clock = new THREE.Timer();
     let frame = 0;
     let time = still ? PATH_PERIOD * 0.12 : 0;
+    let smoothDive = still ? 1 : Math.min(1, sectionProgress() / DIVE_END);
+    let wasDiving = smoothDive < 1;
+    let reversingFromLive = false;
+    const returnPosition = new THREE.Vector3();
+    const returnFacing = new THREE.Vector3();
 
     const animate = () => {
+      if (disposed || document.hidden) {
+        frame = 0;
+        return;
+      }
       clock.update();
       const dt = still ? 0 : Math.min(0.05, clock.getDelta());
       time += dt;
       uTime.value = time;
 
-      const following = pointerInside && pointerSeen;
+      // ─── The dive, scrubbed by scroll. `dive` runs 0 -> 1 across DIVE_END of the
+      //     section and then stays at 1 for the rest of it, which is the underwater
+      //     stretch. Everything above the waterline is a function of this and of nothing
+      //     else — no timers — so scrolling back up runs the whole thing in reverse. ───
+      const targetDive = still ? 1 : Math.min(1, sectionProgress() / DIVE_END);
+      smoothDive += (targetDive - smoothDive) * (1 - Math.exp(-SCROLL_RESPONSE * dt));
+      if (Math.abs(targetDive - smoothDive) < 0.0002) smoothDive = targetDive;
+      const dive = smoothDive;
+      const diveSeconds = dive * DIVE_SECONDS;
+      const diving = dive < 1;
+      if (diving && !wasDiving) {
+        returnPosition.copy(pos);
+        returnFacing.copy(facing);
+        reversingFromLive = true;
+      }
+      if (!diving) reversingFromLive = false;
+      wasDiving = diving;
+
+      // Hold the horizon through the airborne arc and crown splash before descending.
+      if (diving) {
+        const cameraStart = breachAt + 0.65;
+        const cameraT = THREE.MathUtils.clamp((diveSeconds - cameraStart) / (DIVE_SECONDS - cameraStart), 0, 1);
+        const cameraEase = cameraT * cameraT * (3 - 2 * cameraT);
+        camera.position.lerpVectors(CAM_AIR, UNDERWATER_CAM, cameraEase);
+        camAim.lerpVectors(LOOK_AIR, UNDERWATER_LOOK, cameraEase);
+        camera.lookAt(camAim);
+      }
+
+      // How submerged the camera is. This single number decides whether the dome is a
+      // sky or a sea, which of the two surface faces is drawn, and how the fog reads —
+      // driven off the camera's own depth rather than off `dive`, so the change happens
+      // exactly as the lens crosses the water and not a moment either side of it.
+      const depth = Math.min(1, Math.max(0, (SURFACE_Y - camera.position.y) / 0.9));
+      const submerged = depth * depth * (3 - 2 * depth);
+
+      fog.density = FOG_DENSITY_AIR + (FOG_DENSITY - FOG_DENSITY_AIR) * submerged;
+      fog.color.copy(airFog).lerp(waterFog, submerged);
+
+      // Light dims and cools going under; the shafts and the particulate only exist down
+      // there at all, so they come up with it.
+      sun.intensity = 3.1 - 1.0 * submerged;
+      sun.color.copy(sunAir).lerp(sunWater, submerged);
+      rays.visible = submerged > 0.02;
+      motes.visible = submerged > 0.02;
+      moteMat.opacity = 0.5 * submerged;
+      for (const m of rayMaterials) m.uniforms.uFade.value = submerged;
+
+      // Negative before the koi has gone through, which is how the splash and the
+      // surface ripple know they have not happened yet.
+      diveStage.update(
+        time,
+        submerged,
+        diveSeconds - breachAt,
+        impactPoint,
+        camera.position,
+        diveSeconds - launchAt,
+        launchPoint
+      );
+
+      // The cursor and the messages belong to the underwater scene. During the descent
+      // the koi is on rails and there is nothing to follow or to read.
+      const settled = !diving;
+      const following = settled && pointerInside && pointerSeen;
 
       // Where the mouth is. Everything that asks "has the koi got there yet" asks about
       // this and not about `pos`, which is the middle of the body half a length behind.
@@ -787,7 +1043,12 @@ export function UnderwaterScene() {
       // ─── Messages. Suspended entirely while the cursor is in the section: the koi is
       //     following you then, and a line it is ignoring would read as broken. Any live
       //     message is dissolved out rather than cut. ───
-      if (!still && hasMessages) {
+      if (diving) {
+        msgAlive = false;
+        msgGoneAt = time;
+        if (msgRef.current) msgRef.current.style.opacity = "0";
+      }
+      if (!still && settled && hasMessages) {
         if (following) {
           if (msgAlive && msgDissolveAt === Infinity) msgDissolveAt = time;
           // Hold the clock just short of the next spawn, so leaving the section gives a
@@ -810,7 +1071,38 @@ export function UnderwaterScene() {
         }
       }
 
-      if (koiReady) {
+      if (koiReady && diving) {
+        // ─── On rails. Position and facing follow the same virtual clock as the splash.
+        //     is identical every time and scrubs cleanly in both directions — steering
+        //     it would make it depend on where the koi happened to be when you arrived.
+        //     The steering state is kept in step as it goes, so the frame the dive ends
+        //     the swimmer takes over from exactly here rather than from wherever it was
+        //     left standing. ───
+        sampleDive(diveSeconds, divePos, diveDir);
+        pos.copy(divePos);
+        facing.copy(diveDir).normalize();
+        if (reversingFromLive) {
+          const returnT = THREE.MathUtils.clamp((1 - dive) / 0.08, 0, 1);
+          const returnEase = returnT * returnT * (3 - 2 * returnT);
+          pos.lerpVectors(returnPosition, divePos, returnEase);
+          facing.lerpVectors(returnFacing, diveDir, returnEase).normalize();
+          if (returnT === 1) reversingFromLive = false;
+        }
+        speed = 0;
+        yawRate = 0;
+        targetSeeded = false;
+        pointerSeeded = false;
+        hovering = false;
+
+        // Rolls into the plunge and levels out coming up, taken from how steeply it is
+        // heading down — a fish going over the top banks; one levelling off does not.
+        const flightT = THREE.MathUtils.clamp((diveSeconds - FLIGHT_START) / FLIGHT_DURATION, 0, 1);
+        bank = Math.sin(flightT * Math.PI) * 0.22;
+        bankedUp.set(0, 1, 0).applyAxisAngle(facing, -bank);
+        koi.up.copy(bankedUp);
+        koi.position.copy(pos);
+        koi.lookAt(pos.x + facing.x, pos.y + facing.y, pos.z + facing.z);
+      } else if (koiReady) {
         // ─── Pick what the koi is swimming at. Cursor first, then a live message, then
         //     the idle path — which is also where it goes while a message dissolves,
         //     since by then there is nothing left to reach. ───
@@ -951,10 +1243,14 @@ export function UnderwaterScene() {
         node.style.transform = `translate(${cx}px, ${cy}px) translate(-50%, -50%) scale(${1 + out * 0.14})`;
       }
 
+      const fishDepth = THREE.MathUtils.clamp((SURFACE_Y - pos.y + 0.2) / 0.9, 0, 1);
+      uWaveAmp.value = KOI_LENGTH * WAVE_AMP * (0.24 + fishDepth * 0.76);
+      uCausticGain.value = 0.4 * fishDepth;
+
       if (!still) {
         // Particulate drifts up and wraps, so the column never empties.
         const arr = moteGeo.attributes.position.array as Float32Array;
-        const d = 0.016;
+        const d = dt;
         for (let i = 0; i < moteCount; i++) {
           const o = i * 3;
           arr[o] += moteDrift[o] * d;
@@ -965,11 +1261,16 @@ export function UnderwaterScene() {
         moteGeo.attributes.position.needsUpdate = true;
 
         // A slow sway on the shafts and a breath on the camera. Both tiny: the scene
-        // should feel like held breath, not a boat deck.
+        // should feel like held breath, not a boat deck. Only once the dive is over —
+        // the descent owns the camera while it runs, and a wobble on top of a scrubbed
+        // move reads as the two fighting.
         rays.rotation.y = Math.sin(time * 0.06) * 0.06;
-        camera.position.x = Math.sin(time * 0.11) * 0.22;
-        camera.position.y = 0.35 + Math.sin(time * 0.09 + 1.3) * 0.1;
-        camera.lookAt(0, 0, 0);
+        if (settled) {
+          camera.position.x = Math.sin(time * 0.11) * 0.22;
+          camera.position.y = UNDERWATER_CAM.y + Math.sin(time * 0.09 + 1.3) * 0.1;
+          camera.position.z = UNDERWATER_CAM.z;
+          camera.lookAt(UNDERWATER_LOOK);
+        }
       }
 
       renderer.render(scene, camera);
@@ -985,22 +1286,43 @@ export function UnderwaterScene() {
 
     frame = requestAnimationFrame(animate);
 
-    // ─── Park the loop while the section is off screen. ───
+    // Park both when offscreen and when the browser tab is hidden.
+    let inView = false;
+    let contextLost = false;
+    const syncPlayback = () => {
+      const shouldRun = inView && !document.hidden && !contextLost && !disposed;
+      if (shouldRun && !frame) {
+        clock.reset();
+        frame = requestAnimationFrame(animate);
+      } else if (!shouldRun && frame) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+      }
+    };
     const visibility = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          if (!frame) {
-            clock.reset(); // drop the paused span so nothing jumps on resume
-            frame = requestAnimationFrame(animate);
-          }
-        } else if (frame) {
-          cancelAnimationFrame(frame);
-          frame = 0;
-        }
+        inView = entry.isIntersecting;
+        syncPlayback();
       },
       { rootMargin: "12%" }
     );
     visibility.observe(container);
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      contextLost = true;
+      syncPlayback();
+      renderer.domElement.style.opacity = "0";
+      setFailed(true);
+    };
+    const onContextRestored = () => {
+      contextLost = false;
+      renderer.domElement.style.opacity = "1";
+      setFailed(false);
+      syncPlayback();
+    };
+    document.addEventListener("visibilitychange", syncPlayback);
+    renderer.domElement.addEventListener("webglcontextlost", onContextLost);
+    renderer.domElement.addEventListener("webglcontextrestored", onContextRestored);
 
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     const handleResize = () => {
@@ -1010,6 +1332,9 @@ export function UnderwaterScene() {
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height);
+      // The dive's entry point is placed in the frame, so a new frame shape means a new
+      // entry point — and a new breach, which the splash and the ripple hang off.
+      solveDiveCurve();
       if (resizeTimer) clearTimeout(resizeTimer);
       // One frame after a resize, in case the loop is parked and would otherwise leave
       // a stretched buffer on screen until the section is scrolled back into view.
@@ -1020,6 +1345,9 @@ export function UnderwaterScene() {
     return () => {
       disposed = true;
       visibility.disconnect();
+      document.removeEventListener("visibilitychange", syncPlayback);
+      renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
+      renderer.domElement.removeEventListener("webglcontextrestored", onContextRestored);
       window.removeEventListener("resize", handleResize);
       if (canHover && !still) {
         container.removeEventListener("pointermove", onPointerMove);
@@ -1038,11 +1366,11 @@ export function UnderwaterScene() {
       ref={containerRef}
       className="absolute inset-0 h-full w-full"
       style={{
-        // The water column itself. In CSS rather than in the scene: a transparent canvas
-        // over a gradient is one paint instead of a backdrop quad plus its own shader,
-        // and the fog colour above is matched to the middle of it so anything receding
-        // into the distance fades into the water rather than onto it.
-        background: `linear-gradient(180deg, ${SEA.shallow} 0%, ${SEA.mid} 42%, ${SEA.deep} 100%)`,
+        // Only ever seen before the first frame renders, or if WebGL is unavailable —
+        // the sky-and-sea dome covers the whole frame once the scene is up. Sky at the
+        // top and water below, so the placeholder matches where the sequence starts
+        // rather than where it ends.
+        background: failed ? "transparent" : "linear-gradient(180deg, #1686c9 0%, #95dcec 58%, #2885a5 58.4%, #075173 100%)",
       }}
       aria-hidden={!failed}
     >
@@ -1058,11 +1386,6 @@ export function UnderwaterScene() {
         style={{ opacity: 0 }}
       />
 
-      {failed && (
-        <p className="absolute inset-0 grid place-items-center px-6 text-center text-sm text-white/70">
-          This scene could not be loaded.
-        </p>
-      )}
     </div>
   );
 }
